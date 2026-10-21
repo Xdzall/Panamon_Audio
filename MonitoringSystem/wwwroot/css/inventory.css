@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    FILTER AREA
 ============================================================ */
 .filter-area-with-lines {
@@ -517,4 +517,280 @@ body.light-mode .inv-tbl tfoot td.col-model {
 
 .inv-tbl .col-day {
     width: 56px !important;
+}
+
+/* ============================================================
+   SPLIT: tabel Inventory (kiri, setengah halaman, geser horizontal)
+          + urutan model Expander Kyoshin 6.35 per hari (kanan)
+============================================================ */
+.inv-split {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    gap: 14px;
+}
+
+.inv-left {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 50%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.inv-runs {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 50%;
+    min-width: 0;
+    min-height: 0;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    background: rgba(24, 34, 54, 1);
+    color: #e2e8f0;
+}
+
+.inv-runs-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(30,40,60,1);
+    border-bottom: 1px solid rgba(255,255,255,0.18);
+}
+
+.inv-runs-title {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+}
+
+/* Judul panel: putih tebal seperti nama model di grafik */
+.inv-runs-machine {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    color: #ffffff;
+}
+
+body.light-mode .inv-runs-machine {
+    color: #ffffff; /* header panel tetap gelap di mode terang */
+}
+
+.inv-runs-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 16px 14px 14px;
+}
+
+.inv-runs-empty {
+    padding: 40px 10px;
+    text-align: center;
+    opacity: .7;
+}
+
+/* Grafik Actual (bar ke kiri) | Model | Plan (bar ke kanan), skala sama di kedua sisi */
+.inv-pa-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    font-size: 12px;
+}
+
+    .inv-pa-filter label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+    }
+
+    .inv-pa-filter input[type="date"],
+    .filter-content input[type="date"] {
+        height: 28px;
+        width: 122px; /* pas untuk dd/mm/yyyy + ikon kalender, supaya jarak tanggal ke ikon tidak terlalu jauh */
+        padding: 2px 8px 2px 16px;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.08);
+        color: #ffffff;
+        font-size: 12px;
+        /* Ikon kalender: dibuat putih oleh site.css (body.reusable-bg ... invert(1) !important); jangan pakai
+           color-scheme: dark di sini, karena ikon jadi terbalik dua kali (hitam). */
+    }
+
+.inv-pa-btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 6px;
+    border: 1px solid #2f7ed8;
+    background: #2f7ed8;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.inv-pa-legend {
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+    padding: 14px 12px 10px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+    .inv-pa-legend span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+.inv-pa-sw {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.inv-pa-sw-actual, .inv-pa-bar-actual { background: #2f7ed8; }
+.inv-pa-sw-plan, .inv-pa-bar-plan { background: #d35f30; }
+
+.inv-pa-chart {
+    position: relative;
+}
+
+.inv-pa-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px minmax(0, 1fr);
+    align-items: center;
+}
+
+.inv-pa-row {
+    min-height: 38px;
+}
+
+.inv-pa-side {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    min-width: 0;
+}
+
+.inv-pa-left {
+    justify-content: flex-end;
+    border-right: 1px solid rgba(255,255,255,0.35);
+    padding-right: 0;
+}
+
+.inv-pa-right {
+    border-left: 1px solid rgba(255,255,255,0.35);
+}
+
+.inv-pa-bar {
+    display: block;
+    height: 26px;
+    min-width: 2px;
+    flex: none;
+    /* --w = nilai / nilai terbesar periode; 64px disisakan untuk angka di ujung bar */
+    width: calc((100% - 64px) * var(--w, 0));
+}
+
+.inv-pa-left .inv-pa-bar { border-radius: 4px 0 0 4px; }
+.inv-pa-right .inv-pa-bar { border-radius: 0 4px 4px 0; }
+
+.inv-pa-val {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.inv-pa-model {
+    text-align: center;
+    font-size: 14.5px;
+    font-weight: 700;
+    padding: 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inv-good { color: #4ade80; }
+.inv-warn { color: #fbbf24; }
+.inv-bad { color: #f87171; }
+
+body.light-mode .inv-runs {
+    background: rgb(245, 248, 252);
+    color: #1a1a2e;
+    border-color: rgba(200,215,235,0.80);
+}
+
+body.light-mode .inv-runs-head {
+    background: rgba(25,35,58,0.92);
+    color: #fff;
+}
+
+body.light-mode .inv-pa-filter input[type="date"],
+body.light-mode .filter-content input[type="date"] {
+    border-color: rgba(0,0,0,0.2);
+    background: #fff;
+    color: #1a1a2e;
+}
+
+body.light-mode .inv-pa-left { border-right-color: rgba(0,0,0,0.3); }
+body.light-mode .inv-pa-right { border-left-color: rgba(0,0,0,0.3); }
+
+body.light-mode .inv-good { color: #15803d; }
+body.light-mode .inv-warn { color: #b45309; }
+body.light-mode .inv-bad { color: #b91c1c; }
+
+/* Layar sempit: panel urutan model turun ke bawah tabel */
+@media (max-width: 900px) {
+    .inv-split { flex-direction: column; }
+    .inv-runs { min-height: 320px; }
+}
+
+/* Dua kotak terpisah (tabel kiri & grafik kanan) dengan jarak di tengah:
+   kartu luar jadi transparan, masing-masing sisi punya bingkai sendiri */
+.inventory-dashboard > .inv-card.inv-card-split {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0;
+}
+
+.inv-card-split .inv-left {
+    background: rgba(20,30,48,1);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+body.light-mode .inv-card-split .inv-left {
+    background: rgba(255,255,255,0.55);
+    border-color: rgba(200,215,235,0.80);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+}
+
+/* Arahkan kursor ke model / bar kiri / bar kanan: satu baris model itu ditandai biru tipis */
+.inv-pa-row {
+    border-radius: 6px;
+    transition: background-color .12s ease;
+}
+
+    .inv-pa-row:hover {
+        background: rgba(47, 126, 216, 0.22);
+    }
+
+body.light-mode .inv-pa-row:hover {
+    background: rgba(47, 126, 216, 0.16);
 }

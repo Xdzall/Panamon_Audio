@@ -19,4 +19,17 @@
     </None>
   </ItemGroup>
 
+
+  <!-- Aturan jadwal istirahat Panamon (satu sumber dengan BreakTimeService): loss time mesin tidak dihitung di jam istirahat -->
+  <ItemGroup>
+    <Compile Include="..\..\MonitoringSystem\Services\BreakSchedule.cs" Link="Shared\BreakSchedule.cs" />
+  </ItemGroup>
+
+  <!-- Urutan prioritas model (sama dengan list mingguan Expander di Panamon): dipakai urutan harian Plan Brazing -->
+  <ItemGroup>
+    <None Include="..\..\MonitoringSystem\psi-weekly-priority.json" Link="psi-weekly-priority.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
 </Project>

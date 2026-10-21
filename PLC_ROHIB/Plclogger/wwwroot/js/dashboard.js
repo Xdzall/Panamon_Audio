@@ -184,7 +184,121 @@ const SHIFT_LABELS = {
 let rawSapPlanItems = [];
 let currentProductionPlan = null;
 let currentShift = 'ALL';
-let currentMachine = 'MCH1-01'; // Default mesin CU
+// Mesin halaman dari alamat: /plcrohib-app/?machine=BRAZING = salinan Plan untuk mesin lain TANPA PLC.
+// PLC di aplikasi ini milik Expander Kyoshin 6.35 (MCH1-01); mode tanpa PLC tidak membaca / menulis PLC sama sekali
+// dan isi editornya tersimpan terpisah per kode mesin (dbo.PlcRohibEditorRow).
+const PLC_MACHINE_CODE = 'MCH1-01';
+const PAGE_MACHINE = (new URLSearchParams(window.location.search).get('machine') || '').trim().toUpperCase().slice(0, 20);
+const OFFLINE_MODE = PAGE_MACHINE !== '' && PAGE_MACHINE !== PLC_MACHINE_CODE;
+// Source = mesin halaman (mis. Brazing); line-nya dipilih di LINE MESIN (?line=EVA / CON), isi editor per line terpisah
+const PAGE_SOURCE_LABEL = !OFFLINE_MODE ? ''
+  : ({ FINPRESS: 'Fin Press' }[PAGE_MACHINE] || (PAGE_MACHINE.charAt(0) + PAGE_MACHINE.slice(1).toLowerCase()));
+const PAGE_LINES = {
+  BRAZING: [{ code: 'EVA', label: 'Evaporator' }, { code: 'CON', label: 'Condenser' }],
+  FINPRESS: [{ code: 'FX80', label: 'FX80' }, { code: 'FIX36', label: 'FIX36' }, { code: 'SF250', label: 'SF250' }, { code: 'FIX12', label: 'FIX12' }]
+}[PAGE_MACHINE] || [];
+const PAGE_LINE = (() => {
+  const wanted = (new URLSearchParams(window.location.search).get('line') || '').trim().toUpperCase();
+  return PAGE_LINES.find(l => l.code === wanted) || PAGE_LINES[0] || null;
+})();
+// Mesin tanpa PLC yang masuk SOURCE lain (bukan source sendiri): label & source-nya
+const PAGE_MACHINE_INFO = {
+  'EXP-LICHIN': { source: 'EXPANDER', label: 'Expander Li-chin' } // belum terhubung PLC
+};
+// LINE MESIN untuk SOURCE Expander: Kyoshin 6.35 = halaman PLC (tanpa ?machine), Li-chin = mode tanpa PLC
+const EXPANDER_LINES = [
+  { code: '', label: 'Expander Kyoshin 6.35' },
+  { code: 'EXP-LICHIN', label: 'Expander Li-chin' }
+];
+const PAGE_MACHINE_LABEL = !OFFLINE_MODE ? 'Expander Kyoshin 6.35'
+  : PAGE_MACHINE_INFO[PAGE_MACHINE] ? PAGE_MACHINE_INFO[PAGE_MACHINE].label
+  : PAGE_LINE ? `${PAGE_SOURCE_LABEL} ${PAGE_LINE.label}` : PAGE_SOURCE_LABEL;
+// SOURCE halaman ini: Expander (Kyoshin 6.35 & Li-chin), Brazing, atau mesin tanpa PLC lain
+const PAGE_SOURCE_CODE = !OFFLINE_MODE ? 'EXPANDER'
+  : PAGE_MACHINE_INFO[PAGE_MACHINE] ? PAGE_MACHINE_INFO[PAGE_MACHINE].source : PAGE_MACHINE;
+const PAGE_MACHINE_CODE = !OFFLINE_MODE ? PLC_MACHINE_CODE // Default mesin CU
+  : PAGE_LINE ? `${PAGE_MACHINE}-${PAGE_LINE.code}` : PAGE_MACHINE; // mis. BRAZING-EVA (maks. 20 karakter)
+let currentMachine = PAGE_MACHINE_CODE;
+
+// Isi dropdown LINE MESIN: Expander = satu mesin; mode tanpa PLC dengan line = pilihan line (ganti line = muat ulang halaman)
+function renderPageMachineSelect(sel) {
+  if (!sel) return;
+  if (OFFLINE_MODE && PAGE_LINES.length) {
+    sel.innerHTML = PAGE_LINES.map(l =>
+      `<option value="${escapeHtml(l.code)}"${l === PAGE_LINE ? ' selected' : ''}>${escapeHtml(l.label)}</option>`).join('');
+    sel.title = `Line ${PAGE_SOURCE_LABEL} (belum terhubung ke PLC)`;
+    if (!sel.dataset.lineSwitch) {
+      sel.dataset.lineSwitch = '1';
+      sel.addEventListener('change', () => {
+        const params = new URLSearchParams(window.location.search);
+        params.set('line', sel.value);
+        window.location.search = params.toString();
+      });
+    }
+    return;
+  }
+  if (PAGE_SOURCE_CODE === 'EXPANDER') {
+    // Expander Kyoshin 6.35 / Li-chin: ganti line = buka halaman mesin itu (?machine=...)
+    const current = OFFLINE_MODE ? PAGE_MACHINE : '';
+    sel.innerHTML = EXPANDER_LINES.map(l =>
+      `<option value="${escapeHtml(l.code)}"${l.code === current ? ' selected' : ''}>${escapeHtml(l.label)}</option>`).join('');
+    if (OFFLINE_MODE) sel.title = `${PAGE_MACHINE_LABEL} belum terhubung ke PLC`;
+    if (!sel.dataset.lineSwitch) {
+      sel.dataset.lineSwitch = '1';
+      sel.addEventListener('change', () => {
+        if (sel.value === current) return;
+        window.location.search = sel.value ? `machine=${encodeURIComponent(sel.value)}` : '';
+      });
+    }
+    return;
+  }
+  sel.innerHTML = `<option value="${escapeHtml(currentMachine)}" selected>${escapeHtml(PAGE_MACHINE_LABEL)}</option>`;
+  sel.value = currentMachine;
+  if (OFFLINE_MODE) sel.title = `${PAGE_MACHINE_LABEL} belum terhubung ke PLC`;
+}
+// SOURCE di depan LINE MESIN: pindah antar halaman Plan. Brazing = tanpa PLC (?machine=BRAZING), Expander = PLC Kyoshin 6.35.
+// Di dalam Panamon (iframe) halaman Panamon-nya yang diganti (/planbrazing, /planmachine) supaya alamat & sidebar ikut.
+const PAGE_SOURCES = [
+  { code: 'EXPANDER', label: 'Expander', panamonPath: '/planmachine' },
+  { code: 'BRAZING', label: 'Brazing', panamonPath: '/planbrazing' },
+  { code: 'FINPRESS', label: 'Fin Press', panamonPath: '/planfinpress' }
+];
+function renderPageSourceSelect() {
+  const lineSelect = document.getElementById('machineSelectFilter');
+  const lineGroup = lineSelect && lineSelect.parentElement;
+  if (!lineGroup || document.getElementById('pageSourceGroup')) return;
+
+  const currentCode = PAGE_SOURCE_CODE;
+  const sources = PAGE_SOURCES.some(s => s.code === currentCode)
+    ? PAGE_SOURCES
+    : [...PAGE_SOURCES, { code: currentCode, label: PAGE_SOURCE_LABEL, panamonPath: null }];
+
+  const group = document.createElement('div');
+  group.id = 'pageSourceGroup';
+  group.className = 'control-sub-group';
+  group.style.cssText = 'display:flex; align-items:center; gap:8px; margin-right:16px;';
+  group.innerHTML =
+    '<label for="pageSourceSelect" class="sub-label" style="font-weight:700; color:#1d4ed8; font-size:13px; letter-spacing:0.3px;">SOURCE:</label>' +
+    '<select id="pageSourceSelect" class="modern-filter-select" style="min-width:150px; font-weight:700; background-color:#eff6ff; color:#1d4ed8; border:1.5px solid #3b82f6;">' +
+    sources.map(s => `<option value="${escapeHtml(s.code)}"${s.code === currentCode ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('') +
+    '</select>';
+  lineGroup.parentElement.insertBefore(group, lineGroup);
+  lineGroup.parentElement.style.display = 'flex';
+  lineGroup.parentElement.style.alignItems = 'center';
+
+  group.querySelector('select').addEventListener('change', (e) => {
+    const target = sources.find(s => s.code === e.target.value);
+    if (!target || target.code === currentCode) return;
+    try {
+      if (target.panamonPath && window.top !== window && window.top.location.pathname) {
+        window.top.location.href = target.panamonPath;
+        return;
+      }
+    } catch (_) { /* bukan di dalam Panamon: ganti halaman ini saja */ }
+    window.location.search = target.code === 'EXPANDER' ? '' : `machine=${encodeURIComponent(target.code)}`;
+  });
+}
+
 let currentUnitType = 'CU';      // Default tipe produk CU murni
 // Tanggal hari ini (jam lokal PC, format YYYY-MM-DD). Pilihan tanggal sudah dihapus:
 // saran model dari rencana SapPlan selalu memakai tanggal hari ini.
@@ -209,14 +323,21 @@ document.addEventListener('DOMContentLoaded', () => {
   loadMasterSutMap();        // SUT per model dari Master Data Produk
   loadPlanData(selectedDate); // Rencana SapPlan hanya sebagai saran model
 
-  // Polling: baca R100/R101 dari PLC + update overtime setiap 15 detik
-  startPlcStatusPolling();
+  renderPageSourceSelect(); // SOURCE (Brazing / Expander) di depan LINE MESIN
 
-  // Polling: cek akhir shift setiap 30 detik
-  startShiftEndPolling();
+  if (OFFLINE_MODE) {
+    // Salinan Plan untuk mesin lain (mis. Brazing): tidak ada pembacaan / pengiriman PLC sama sekali
+    applyOfflineMode();
+  } else {
+    // Polling: baca R100/R101 dari PLC + update overtime setiap 15 detik
+    startPlcStatusPolling();
 
-  // Polling: auto-refresh nilai ACTUAL & DEFECT dari PLC secara real-time setiap 3 detik
-  startPlcActualPolling();
+    // Polling: cek akhir shift setiap 30 detik
+    startShiftEndPolling();
+
+    // Polling: auto-refresh nilai ACTUAL & DEFECT dari PLC secara real-time setiap 3 detik
+    startPlcActualPolling();
+  }
 
   // Polling: kolom ACTUAL editor dari output Inventory AC OEE per model setiap 60 detik
   startInventoryActualPolling();
@@ -229,6 +350,175 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => openShiftEndModal({ currentShift: 'Shift 1 (Pagi)', minutesLeft: 3, secondsLeft: 180, nextShift: 'Shift 2 (15:45)' }), 500);
   }
 });
+
+// =========================================================================
+// MODE TANPA PLC (?machine=BRAZING dsb.): tampilan sama, tapi semua tombol kirim ke PLC dimatikan,
+// Live Preview tidak membaca PLC, dan ada penanda di atas halaman. Server juga menolak kiriman mesin ini.
+// =========================================================================
+// Plan Brazing (Condenser / Evaporator): kirim plan & baca Live Preview / Actual dari PLC Brazing (192.168.1.10:5010)
+const BRAZING_SEND = OFFLINE_MODE && PAGE_MACHINE === 'BRAZING';
+
+// Plan Fin Press (FX80 / FIX36 / SF250 / FIX12): address plan sudah disiapkan dari file "addres Machine Fin press.xlsx"
+// (D300 - D6449), PLC, master data & sumber rencana belum ada -> mode tanpa PLC.
+// Tiap kolom satu blok register D berurutan (baris n = offset n-1). TANG & BULAN = dua word angka (tanggal, bulan).
+// Harus sama dengan FinPressLines di Program.cs.
+const FIN_PRESS_PAGE = OFFLINE_MODE && PAGE_MACHINE === 'FINPRESS';
+const FIN_PRESS_LINES = {
+  'FINPRESS-FX80':  { rows: 120, model: 300,  sut: 1500, plan: 1620, actual: 1740, day: 1860, month: 1980 },
+  'FINPRESS-FIX36': { rows: 120, model: 2100, sut: 3300, plan: 3420, actual: 3540, day: 3660, month: 3780 },
+  'FINPRESS-SF250': { rows: 120, model: 3900, sut: 5100, plan: 5220, actual: 5340, day: 5460, month: 5580 },
+  'FINPRESS-FIX12': { rows: 50,  model: 5700, sut: 6200, plan: 6250, actual: 6300, day: 6350, month: 6400 }
+};
+function finPressRegMap(i) {
+  const m = FIN_PRESS_LINES[currentMachine];
+  const has = !!m && i < m.rows; // FIX12 hanya 50 baris di PLC
+  const d = (base) => has ? `D${base + i}` : '-';
+  const mStart = has ? m.model + i * 10 : 0;
+  return {
+    rowNo: i + 1,
+    page: Math.floor(i / ROWS_PER_HMI_PAGE) + 1,
+    mAddr: has ? `D${mStart}-D${mStart + 9}` : '-',
+    sAddr: has ? d(m.sut) : '-',
+    pAddr: has ? d(m.plan) : '-',
+    actAddr: has ? d(m.actual) : '-',
+    defAddr: '-', // tidak ada kolom defect di tabel plan Fin Press
+    dateAddr: has ? `${d(m.day)} / ${d(m.month)}` : '-',
+    mId: '', pId: '', sId: '', actId: '', defId: '', noId: '',
+    noAddr: `ROW ${i + 1}`
+  };
+}
+
+// Peta register per baris (0-based idx) untuk PLC Brazing (Condenser vs Evaporator)
+function brazingRegMap(i) {
+  const isEva = currentMachine === 'BRAZING-EVA';
+  const mBase = isEva ? 3300 : 300;
+  const sBase = isEva ? 4500 : 1500;
+  const pBase = isEva ? 4620 : 1620;
+  const aBase = isEva ? 4740 : 1740;
+  const psBase = isEva ? 4860 : 1860;
+  const dfBase = isEva ? 4980 : 1980;
+  const dtBase = isEva ? 5100 : 2100;
+  const kdBase = isEva ? 5821 : 2821; // Ket Defect: register R, 10 word per baris
+  const mStart = mBase + i * 10;
+  const dtStart = dtBase + i * 10;
+  return {
+    rowNo: i + 1,
+    page: Math.floor(i / ROWS_PER_HMI_PAGE) + 1,
+    mAddr: `D${mStart}-D${mStart + 9}`,
+    pAddr: `D${pBase + i}`,
+    sAddr: `D${sBase + i}`,
+    actAddr: `D${aBase + i}`,
+    planSutAddr: `D${psBase + i}`,
+    defAddr: `D${dfBase + i}`,
+    dateAddr: `D${dtStart}-D${dtStart + 9}`,
+    ketDefectAddr: `R${kdBase + i * 10}-R${kdBase + i * 10 + 9}`,
+    mId: '', pId: '', sId: '', actId: '', defId: '', noId: '',
+    noAddr: `ROW ${i + 1}`
+  };
+}
+
+function applyOfflineMode() {
+  document.title = BRAZING_SEND
+    ? `Plan ${PAGE_MACHINE_LABEL} - Production Plan`
+    : `Plan ${PAGE_MACHINE_LABEL} - Production Plan (belum terhubung PLC)`;
+
+  const planMachineSelect = document.getElementById('machineSelectFilter');
+  if (planMachineSelect) {
+    renderPageMachineSelect(planMachineSelect);
+
+  }
+
+  // Brazing: kirim semua baris boleh; kirim Row 1 saja (P1) belum ada untuk PLC Brazing
+  (BRAZING_SEND ? ['btnConfirmDispatchP1'] : ['btnConfirmDispatchAll', 'btnConfirmDispatchP1', 'btnSubmitDispatch']).forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = true;
+    btn.title = BRAZING_SEND
+      ? 'Plan Brazing: kirim Row 1 saja belum tersedia, pakai kirim semua baris'
+      : `${PAGE_MACHINE_LABEL} belum terhubung ke PLC: data tidak bisa dikirim`;
+    btn.style.opacity = '0.45';
+    btn.style.cursor = 'not-allowed';
+  });
+
+  // Fin Press: sumber rencana (SAP Plan / PSI) belum ditentukan -> isi editor manual dulu
+  if (FIN_PRESS_PAGE) {
+    const btnDb = document.getElementById('btnResetToDb');
+    if (btnDb) {
+      btnDb.disabled = true;
+      btnDb.title = `Sumber rencana ${PAGE_MACHINE_LABEL} belum ada: isi editor manual`;
+      btnDb.style.opacity = '0.45';
+      btnDb.style.cursor = 'not-allowed';
+    }
+  }
+
+  // Baca Actual dari PLC aktif untuk Brazing, dimatikan hanya untuk mesin offline lain
+  const btnRead = document.getElementById('btnReadPlcNow');
+  if (btnRead && !BRAZING_SEND) {
+    btnRead.disabled = true;
+    btnRead.title = `Baca nilai Actual dari PLC ${PAGE_MACHINE_LABEL} belum tersedia`;
+    btnRead.style.opacity = '0.45';
+    btnRead.style.cursor = 'not-allowed';
+  }
+
+  const banner = document.createElement('div');
+  banner.id = 'offlineModeBanner';
+  banner.style.cssText = 'margin:0 0 12px; padding:10px 14px; border-radius:8px; background:#fff7ed; border:1.5px solid #fb923c; color:#9a3412; font-weight:700; font-size:13px;';
+  banner.innerHTML = BRAZING_SEND
+    ? `ℹ Plan <strong>${escapeHtml(PAGE_MACHINE_LABEL)}</strong>: terhubung ke PLC Brazing (Model, SUT, Prod Plan, Actual, Plan SUT, Defect, Date PSI).`
+    : `⚠ Plan <strong>${escapeHtml(PAGE_MACHINE_LABEL)}</strong> belum terhubung ke PLC. ` +
+      (FIN_PRESS_PAGE
+        ? `Address plan sudah disiapkan (${FIN_PRESS_LINES[currentMachine] ? FIN_PRESS_LINES[currentMachine].rows : 0} baris); editor & simpan ke database bisa dipakai, kirim ke PLC menunggu IP PLC.`
+        : 'Editor, master data, dan simpan ke database bisa dipakai; kirim ke PLC & Live Preview dimatikan.');
+  const main = document.querySelector('main');
+  if (main && main.parentNode) main.parentNode.insertBefore(banner, main); else document.body.insertBefore(banner, document.body.firstChild);
+
+  setPlcMirrorStatus('nolink');
+  if (BRAZING_SEND) {
+    const status = document.getElementById('hmiMirrorStatus');
+    if (status && !document.getElementById('btnCheckBrazingPlc')) {
+      const btn = document.createElement('button');
+      btn.id = 'btnCheckBrazingPlc';
+      btn.type = 'button';
+      btn.textContent = '🔌 Cek Koneksi PLC';
+      btn.title = 'Coba hubungkan & muat ulang register dari PLC Brazing (hanya membaca, tidak menulis apa pun)';
+      btn.style.cssText = 'margin-left:8px; white-space:nowrap; font-size:12px; font-weight:700; padding:4px 12px; border-radius:999px; border:1.5px solid #2563eb; background:#eff6ff; color:#1d4ed8; cursor:pointer;';
+      btn.addEventListener('click', checkBrazingPlc);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:6px 0;';
+      status.style.whiteSpace = 'nowrap';
+      status.parentNode.insertBefore(wrap, status);
+      wrap.appendChild(status);
+      wrap.appendChild(btn);
+    }
+    checkBrazingPlc();
+    startBrazingPlcPolling();
+    return;
+  }
+  addLog(`[MODE] Plan ${PAGE_MACHINE_LABEL}: tidak terhubung ke PLC (salinan halaman Expander 6.35).`, 'info');
+}
+
+// Plan Brazing: cek koneksi ke PLC Brazing lewat api/brazing/plc/status lalu muat isi register ke Live Preview
+async function checkBrazingPlc() {
+  const btn = document.getElementById('btnCheckBrazingPlc');
+  const status = document.getElementById('hmiMirrorStatus');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '⏳ Mengecek...'; }
+  setPlcMirrorStatus('brzwait');
+  try {
+    const res = await fetch(`api/brazing/plc/status?machine=${encodeURIComponent(currentMachine)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setPlcMirrorStatus(data.success ? 'brzok' : 'brzfail', data.checkedAt);
+    if (status) status.title = data.message || '';
+    addLog(`[PLC BRAZING] ${data.message}`, data.success ? 'success' : 'error');
+    if (data.success) await readBrazingPlcRegisters(true);
+  } catch (e) {
+    setPlcMirrorStatus('brzfail', new Date().toLocaleTimeString('id-ID'));
+    if (status) status.title = `Server PLC Dispatcher tidak merespons (${e.message})`;
+    addLog(`[PLC BRAZING] Server tidak merespons: ${e.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '🔌 Cek Koneksi PLC'; }
+  }
+}
 
 // =========================================================================
 // CUSTOM APP MODAL & NOTIFICATION POPUP (USER-FRIENDLY & CLEAN)
@@ -371,7 +661,7 @@ function selectOperatorShift(shiftCode) {
 // 3. Setup Filter Mesin & Tipe Unit (Khusus Mesin CU: MCH1-01)
 function setupMachineFilters() {
   currentUnitType = 'CU';
-  currentMachine = 'MCH1-01';
+  currentMachine = PAGE_MACHINE_CODE;
 
   const unitFilter = document.getElementById('unitTypeFilter');
   if (unitFilter) {
@@ -384,9 +674,9 @@ function setupMachineFilters() {
 
   const machineSelect = document.getElementById('machineSelectFilter');
   if (machineSelect) {
-    machineSelect.value = 'MCH1-01';
+    machineSelect.value = currentMachine;
     machineSelect.addEventListener('change', () => {
-      currentMachine = 'MCH1-01';
+      currentMachine = PAGE_MACHINE_CODE; // ganti line (mode tanpa PLC) memuat ulang halaman
       updateAllDatalists();
     });
   }
@@ -423,8 +713,13 @@ function setupActionButtons() {
 
   const btnReadPlc = document.getElementById('btnReadPlcNow');
   if (btnReadPlc) {
-    btnReadPlc.addEventListener('click', () => readPlcRegisters(false));
+    btnReadPlc.addEventListener('click', () => BRAZING_SEND ? readBrazingPlcRegisters(false) : readPlcRegisters(false));
   }
+}
+
+// Awalan model saran dari api/plan: Brazing Evaporator = CS (api/plan tidak berisi CS -> saran dari master saja), lainnya CU
+function planModelPrefix() {
+  return currentMachine === 'BRAZING-EVA' ? 'CS' : 'CU';
 }
 
 // Muat Data Rencana Produksi Sesuai Tanggal yang Dipilih (KHUSUS PRODUK CU)
@@ -438,10 +733,11 @@ async function loadPlanData(date) {
     const data = await res.json();
     currentProductionPlan = data.productionPlan;
 
-    // KHUSUS MESIN CU: Hanya ambil dan simpan produk CU murni (Abaikan KIOS dan CS)
+    // api/plan hanya berisi produk CU (line MCH1-01): dipakai untuk Expander & Brazing Condenser.
+    // Brazing Evaporator (CS) tidak memakai saran ini; sarannya dari Master Data Produk "Evaporator".
     rawSapPlanItems = (data.sapPlan || []).filter(x => {
       const p = (x.productName || '').trim().toUpperCase();
-      return p.startsWith('CU');
+      return p.startsWith(planModelPrefix());
     });
 
     // Tampilkan PlanId
@@ -460,8 +756,10 @@ async function loadPlanData(date) {
       addLog(`[DATABASE] Database tidak dapat diakses (${data.dbStatus}). Saran model dari rencana tidak tersedia.`, 'error');
     } else if (!currentProductionPlan) {
       addLog(`[DATABASE] Tidak ada rencana produksi (ProductionPlan) untuk tanggal ${date}.`, 'info');
+    } else if (currentMachine === 'BRAZING-EVA') {
+      addLog('[DATABASE] Saran model Evaporator diambil dari Master Data Produk (mesin Evaporator).', 'info');
     } else {
-      addLog(`[DATABASE] ${rawSapPlanItems.length} produk CU dari rencana tanggal ${date} tersedia sebagai saran model.`, 'success');
+      addLog(`[DATABASE] ${rawSapPlanItems.length} produk ${planModelPrefix()} dari rencana tanggal ${date} tersedia sebagai saran model.`, 'success');
     }
 
     updateAllDatalists();
@@ -471,12 +769,20 @@ async function loadPlanData(date) {
 }
 
 // SUT per model dari Master Data Produk (tabel MasterProduct). Key = nama model huruf besar.
+//   Expander: hanya baris mesin "Expander Kyoshin 6.35".
+//   Brazing : hanya baris mesin line-nya ("Condenser" / "Evaporator"), lewat api/brazing-sut.
+// Model Brazing yang belum terdaftar memakai SUT default line (Condenser 35 detik).
+const BRAZING_DEFAULT_SUT = { 'BRAZING-CON': 35, 'BRAZING-EVA': 35 };
 let masterSutMap = {};
 let masterModelList = []; // [{ model, sut }] untuk saran model
 
 async function loadMasterSutMap() {
   try {
-    const res = await fetch('api/masterproduct');
+    const brazing = OFFLINE_MODE && PAGE_MACHINE === 'BRAZING';
+    // Expander hanya baris mesinnya sendiri: model CU yang sama juga terdaftar untuk Condenser dengan SUT berbeda
+    const res = await fetch(brazing
+      ? `api/brazing-sut?machine=${encodeURIComponent(currentMachine)}`
+      : `api/masterproduct?machine=${encodeURIComponent(PAGE_MACHINE_LABEL)}`);
     if (!res.ok) throw await masterApiError(res);
     const data = await res.json();
     masterSutMap = {};
@@ -494,7 +800,9 @@ async function loadMasterSutMap() {
 }
 
 function getMasterSut(modelName) {
-  return masterSutMap[(modelName || '').trim().toUpperCase()] || 0;
+  const key = (modelName || '').trim().toUpperCase();
+  if (!key) return 0;
+  return masterSutMap[key] || (OFFLINE_MODE ? (BRAZING_DEFAULT_SUT[currentMachine] || 0) : 0);
 }
 
 // Rencana SapPlan tanggal terpilih yang sesuai shift & line CU MCH1-01
@@ -512,7 +820,7 @@ const plcModelKey = (name) => (name || '').trim().toUpperCase();
 // invActual & defect = ACTUAL (Inventory) & DEFECT milik isi baris ini, disimpan di database bersama isi editor.
 // planDate = tanggal plan dari list rencana (yyyy-MM-dd), hanya ditampilkan di kolom Urutan Antrian / Tanggal.
 function makeEditorRow(i, modelName, prodPlan, sut, planDate = '', savedActual = 0, savedDefect = 0) {
-  const reg = PLC_REGISTER_MAP[i] || {
+  const reg = BRAZING_SEND ? brazingRegMap(i) : FIN_PRESS_PAGE ? finPressRegMap(i) : (PLC_REGISTER_MAP[i] || {
     rowNo: i + 1,
     page: Math.floor(i / ROWS_PER_HMI_PAGE) + 1,
     mAddr: `R${1000 + i * 20}`,
@@ -522,7 +830,7 @@ function makeEditorRow(i, modelName, prodPlan, sut, planDate = '', savedActual =
     defAddr: `R${1014 + i * 20}`,
     mId: '-', pId: '-', sId: '-', actId: '-', defId: '-', noId: '-',
     noAddr: 'R999'
-  };
+  });
   const prev = current9Rows[i];
 
   return {
@@ -532,7 +840,10 @@ function makeEditorRow(i, modelName, prodPlan, sut, planDate = '', savedActual =
     planAddr: reg.pAddr,
     sutAddr: reg.sAddr,
     actAddr: reg.actAddr,
+    planSutAddr: reg.planSutAddr || '',
     defAddr: reg.defAddr,
+    dateAddr: reg.dateAddr || '',
+    ketDefectAddr: reg.ketDefectAddr || '',
     mId: reg.mId,
     pId: reg.pId,
     sId: reg.sId,
@@ -545,6 +856,8 @@ function makeEditorRow(i, modelName, prodPlan, sut, planDate = '', savedActual =
     sut: sut,
     planDate: planDate || '',
     actual: prev ? prev.actual : 0,
+    planSut: prev ? (prev.planSut || 0) : 0,
+    ketDefect: prev ? (prev.ketDefect || '') : '', // Ket Defect PLC Brazing (milik model baris ini, tidak disimpan)
     invActual: savedActual || 0,
     defect: savedDefect || 0
   };
@@ -685,22 +998,27 @@ function startEditorDraftAutosave() {
   });
 }
 
-// Tombol "Isi dari Rencana Database": isi editor dengan list rencana satu bulan penuh (semua minggu, tabel
-// dbo.PsiWeeklyPlan, diisi worker SAP Plan Panamon) sesuai urutan list, Plan = Qty list, SUT dari Master Data Produk.
+// Tombol "Isi dari Rencana Database": isi editor dengan rencana satu bulan penuh sesuai urutannya, SUT dari Master Data Produk.
+//   Expander: list mingguan dbo.PsiWeeklyPlan (diisi worker SAP Plan Panamon), Plan = Qty list (model digabung per minggu).
+//   Brazing : rencana HARIAN dbo.SapPlan (PSI apa adanya), Plan = Qty PSI per tanggal; Condenser = model CU, Evaporator =
+//             model CS, tanpa KIOS & DN; urutan dalam satu hari = prioritas yang sama dengan Expander (api/sap-daily).
 async function populate9RowsFromDatabase() {
   const monthSel = document.getElementById('psiMonthSelect');
   const month = monthSel && monthSel.value ? monthSel.value : getTodayLocalDate().slice(0, 7);
   const monthLabel = monthSel && monthSel.selectedIndex >= 0 ? monthSel.options[monthSel.selectedIndex].text : month;
+  const brazing = OFFLINE_MODE && PAGE_MACHINE === 'BRAZING';
+  const sourceName = brazing ? 'rencana harian PSI (dbo.SapPlan)' : 'list rencana mingguan (dbo.PsiWeeklyPlan)';
   let data;
   try {
-    const res = await fetch(`api/psi-weekly?machine=${encodeURIComponent(currentMachine)}&month=${month}`);
+    const api = brazing ? 'api/sap-daily' : 'api/psi-weekly';
+    const res = await fetch(`${api}?machine=${encodeURIComponent(currentMachine)}&month=${month}`);
     if (!res.ok) throw await draftApiError(res);
     data = await res.json();
   } catch (err) {
     showAppModal({
       type: 'error',
-      title: 'Gagal Mengambil List Mingguan',
-      message: `List mingguan tidak bisa diambil dari database: <strong>${escapeHtml(err.message)}</strong>`,
+      title: brazing ? 'Gagal Mengambil Rencana Harian' : 'Gagal Mengambil List Mingguan',
+      message: `${brazing ? 'Rencana harian' : 'List mingguan'} tidak bisa diambil dari database: <strong>${escapeHtml(err.message)}</strong>`,
       tip: 'Editor tidak diubah. Periksa koneksi database lalu coba lagi.',
       buttonText: 'Tutup'
     });
@@ -720,8 +1038,10 @@ async function populate9RowsFromDatabase() {
   }
 
   const filled = editorDraftRows().length;
-  const weeks = new Set(items.map(x => x.weekStart)).size;
-  if (filled > 0 && !confirm(`Editor berisi ${filled} baris. Ganti dengan list rencana ${monthLabel} (${weeks} minggu, ${items.length} model)?`)) {
+  const periods = brazing
+    ? `${new Set(items.map(x => x.planDate)).size} hari`
+    : `${new Set(items.map(x => x.weekStart)).size} minggu`;
+  if (filled > 0 && !confirm(`Editor berisi ${filled} baris. Ganti dengan ${sourceName} ${monthLabel} (${periods}, ${items.length} model)?`)) {
     return;
   }
 
@@ -739,8 +1059,8 @@ async function populate9RowsFromDatabase() {
   renderHmiPreview();
   updateAllDatalists();
 
-  addLog(`[DATABASE] Editor diisi ${items.length} model dari list rencana ${monthLabel} (${weeks} minggu, dbo.PsiWeeklyPlan). Belum dikirim ke PLC.`, 'info');
-  if (items.length > TOTAL_PLC_ROWS) {
+  addLog(`[DATABASE] Editor diisi ${items.length} model dari ${sourceName} ${monthLabel} (${periods}).${brazing ? '' : ' Belum dikirim ke PLC.'}`, 'info');
+  if (!brazing && items.length > TOTAL_PLC_ROWS) {
     addLog(`[PERINGATAN] List ${monthLabel} berisi ${items.length} model, lebih dari ${TOTAL_PLC_ROWS} baris HMI. Baris ${TOTAL_PLC_ROWS + 1} dst. tidak ikut dikirim ke PLC.`, 'error');
   }
   const noSut = rows.filter(r => r.modelName && !r.sut).map(r => `Row ${r.rowNo} (${r.modelName})`);
@@ -826,6 +1146,7 @@ function renderEditableTable() {
         <span class="actual-display-box" id="defectBadge_${idx}" title="Register ${row.defAddr} (Defect - Read Only)" style="color:#b91c1c;">
           ${row.defect || 0}
         </span>
+        ${BRAZING_SEND ? `<div class="ket-defect-note" id="ketDefect_${idx}" title="Ket Defect ${row.ketDefectAddr || ''}: ${escapeHtml(row.ketDefect || '')}">${escapeHtml(row.ketDefect || '')}</div>` : ''}
       </td>
       <td style="text-align:center;">
         <!-- TANGGAL PLAN + URUTAN ANTRIAN (kotak ditahan & digeser) -->
@@ -1075,8 +1396,11 @@ window.onModelChange = function(idx, val) {
   if (plcModelKey(trimmed) !== plcModelKey(current9Rows[idx].modelName)) {
     // Model baris diganti: DEFECT tersimpan milik model lama tidak berlaku lagi
     current9Rows[idx].defect = 0;
+    current9Rows[idx].ketDefect = '';
     const defBadge = document.getElementById(`defectBadge_${idx}`);
     if (defBadge) defBadge.innerText = 0;
+    const ketEl = document.getElementById(`ketDefect_${idx}`);
+    if (ketEl) ketEl.innerText = '';
   }
   current9Rows[idx].modelName = trimmed;
 
@@ -1163,9 +1487,10 @@ function buildModelOptionsHtml(idx) {
     options.push(`<option value="${escapeHtml(p.productName)}">${escapeHtml(p.productName)} - Plan: ${getProductPlanQuantity(p)} pcs | SUT: ${sut > 0 ? sut + 's' : 'belum ada'} (Shift ${escapeHtml(p.shift)})</option>`);
   });
 
+  // Brazing: master sudah per mesin (Condenser / Evaporator), jadi semua modelnya ditawarkan (termasuk EU-/EP-)
   masterModelList.forEach(m => {
     const key = m.model.toUpperCase();
-    if (!key.startsWith('CU') || seen.has(key)) return;
+    if ((!BRAZING_SEND && !key.startsWith('CU')) || seen.has(key)) return;
     seen.add(key);
     options.push(`<option value="${escapeHtml(m.model)}">${escapeHtml(m.model)} - Master Data | SUT: ${m.sut}s</option>`);
   });
@@ -1229,7 +1554,11 @@ function setPlcMirrorStatus(state, readAt) {
     live:    ['#dcfce7', '#166534', `● MIRROR PLC ONLINE — terbaca ${readAt || ''}`],
     offline: ['#fee2e2', '#991b1b', `● PLC OFFLINE — preview tidak menampilkan data${readAt ? ' (cek ' + readAt + ')' : ''}`],
     server:  ['#fef3c7', '#92400e', '● Server PLC Dispatcher tidak merespons'],
-    wait:    ['#e2e8f0', '#334155', '● Menghubungkan ke PLC...']
+    wait:    ['#e2e8f0', '#334155', '● Menghubungkan ke PLC...'],
+    nolink:  ['#ffedd5', '#9a3412', `● ${PAGE_MACHINE_LABEL} belum terhubung ke PLC`],
+    brzwait: ['#e2e8f0', '#334155', '● Mengecek koneksi PLC Brazing...'],
+    brzok:   ['#dcfce7', '#166534', `● PLC Brazing TERHUBUNG${readAt ? ' — cek ' + readAt : ''}`],
+    brzfail: ['#fee2e2', '#991b1b', `● PLC Brazing TIDAK TERHUBUNG${readAt ? ' — cek ' + readAt : ''}`]
   };
   const [bg, fg, text] = styles[state] || styles.wait;
   el.style.background = bg;
@@ -1243,55 +1572,133 @@ function renderHmiPreview() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  if (BRAZING_SEND) {
+    const theadTr = tbody.closest('table')?.querySelector('thead tr');
+    if (theadTr && !theadTr.dataset.brazingHead) {
+      theadTr.dataset.brazingHead = '1';
+      theadTr.innerHTML = `
+        <th style="width: 58px;">NO</th>
+        <th>MODEL</th>
+        <th style="width: 95px;">SUT</th>
+        <th style="width: 110px;">P. PLAN</th>
+        <th style="width: 110px;">ACTUAL</th>
+        <th style="width: 110px;">PLAN SUT</th>
+        <th style="width: 100px;">DEFECT</th>
+        <th style="width: 150px;">KET DEFECT</th>
+        <th style="width: 135px;">DATE PSI</th>
+      `;
+    }
+  }
+
   const pagePos = Math.max(0, HMI_PAGES.indexOf(currentHmiPage));
   const startIdx = pagePos * ROWS_PER_HMI_PAGE;
   const endIdx = startIdx + ROWS_PER_HMI_PAGE;
   const live = plcMirrorLive === true;
-  const displayRows = getPlcMirrorRows().slice(startIdx, endIdx).map(r => live ? r : { ...r, modelName: '', prodPlan: '-', sut: 0, actual: '-', defect: '-' });
+  const displayRows = getPlcMirrorRows().slice(startIdx, endIdx).map(r => live ? r : { ...r, modelName: '', prodPlan: '-', sut: 0, actual: '-', planSut: '-', defect: '-', ketDefect: '', planDate: '' });
 
   displayRows.forEach((row, rowSubIdx) => {
     const idx = startIdx + rowSubIdx;
     const tr = document.createElement('tr');
     const modelDisplay = row.modelName || '-';
 
-    tr.innerHTML = `
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd no-cell">
-          <span class="hmi-cell-lcd-tag">${row.noId || '10089'} ${row.noAddr || 'R999'}</span>
-          <span class="hmi-cell-lcd-val">${row.rowNo}</span>
-        </div>
-      </td>
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd model-cell">
-          <span class="hmi-cell-lcd-tag">${row.mId || '10005'} ${row.modelAddr}</span>
-          <span class="hmi-cell-lcd-val" id="hmiModelText_${idx}" title="${escapeHtml(modelDisplay)}">${escapeHtml(modelDisplay)}</span>
-        </div>
-      </td>
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd num-right">
-          <span class="hmi-cell-lcd-tag">${row.pId || '10037'} ${row.planAddr}</span>
-          <span class="hmi-cell-lcd-val" id="hmiQtyText_${idx}" title="Nilai PROD. PLAN di PLC">${row.prodPlan}</span>
-        </div>
-      </td>
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd num-right">
-          <span class="hmi-cell-lcd-tag">${row.sId || '10045'} ${row.sutAddr || row.sAddr || 'R1011'}</span>
-          <span class="hmi-cell-lcd-val" id="hmiSutText_${idx}">${row.sut > 0 ? row.sut + ' s' : '-'}</span>
-        </div>
-      </td>
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd num-right">
-          <span class="hmi-cell-lcd-tag">${row.actId || '10064'} ${row.actAddr}</span>
-          <span class="hmi-cell-lcd-val" id="hmiActText_${idx}" title="Nilai ACTUAL ditarik dari PLC">${row.actual}</span>
-        </div>
-      </td>
-      <td style="padding: 2px;">
-        <div class="hmi-cell-lcd num-right">
-          <span class="hmi-cell-lcd-tag">${row.defId || '10072'} ${row.defAddr}</span>
-          <span class="hmi-cell-lcd-val" id="hmiDefText_${idx}" title="Nilai DEFECT ditarik dari PLC">${row.defect ?? 0}</span>
-        </div>
-      </td>
-    `;
+    if (BRAZING_SEND) {
+      const dateDisplay = row.planDate || '-';
+      tr.innerHTML = `
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd no-cell">
+            <span class="hmi-cell-lcd-tag">${row.noAddr || ('ROW ' + row.rowNo)}</span>
+            <span class="hmi-cell-lcd-val">${row.rowNo}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd model-cell">
+            <span class="hmi-cell-lcd-tag">${row.modelAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiModelText_${idx}" title="${escapeHtml(modelDisplay)}">${escapeHtml(modelDisplay)}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.sutAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiSutText_${idx}">${row.sut > 0 ? row.sut + ' s' : '-'}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.planAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiQtyText_${idx}" title="Nilai P. PLAN di PLC">${row.prodPlan}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.actAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiActText_${idx}" title="Nilai ACTUAL ditarik dari PLC">${row.actual}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.planSutAddr || ''}</span>
+            <span class="hmi-cell-lcd-val" id="hmiPlanSutText_${idx}" title="Nilai PLAN SUT ditarik dari PLC">${row.planSut ?? '-'}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.defAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiDefText_${idx}" title="Nilai DEFECT ditarik dari PLC">${row.defect ?? 0}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd model-cell">
+            <span class="hmi-cell-lcd-tag">${row.ketDefectAddr || ''}</span>
+            <span class="hmi-cell-lcd-val" id="hmiKetDefText_${idx}" title="${escapeHtml(row.ketDefect || '')}">${escapeHtml(row.ketDefect || '-')}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd model-cell">
+            <span class="hmi-cell-lcd-tag">${row.dateAddr || ''}</span>
+            <span class="hmi-cell-lcd-val" id="hmiDateText_${idx}" title="${escapeHtml(dateDisplay)}">${escapeHtml(dateDisplay)}</span>
+          </div>
+        </td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd no-cell">
+            <span class="hmi-cell-lcd-tag">${row.noId ?? '10089'} ${row.noAddr || 'R999'}</span>
+            <span class="hmi-cell-lcd-val">${row.rowNo}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd model-cell">
+            <span class="hmi-cell-lcd-tag">${row.mId ?? '10005'} ${row.modelAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiModelText_${idx}" title="${escapeHtml(modelDisplay)}">${escapeHtml(modelDisplay)}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.pId ?? '10037'} ${row.planAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiQtyText_${idx}" title="Nilai PROD. PLAN di PLC">${row.prodPlan}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.sId ?? '10045'} ${row.sutAddr || row.sAddr || 'R1011'}</span>
+            <span class="hmi-cell-lcd-val" id="hmiSutText_${idx}">${row.sut > 0 ? row.sut + ' s' : '-'}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.actId ?? '10064'} ${row.actAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiActText_${idx}" title="Nilai ACTUAL ditarik dari PLC">${row.actual}</span>
+          </div>
+        </td>
+        <td style="padding: 2px;">
+          <div class="hmi-cell-lcd num-right">
+            <span class="hmi-cell-lcd-tag">${row.defId ?? '10072'} ${row.defAddr}</span>
+            <span class="hmi-cell-lcd-val" id="hmiDefText_${idx}" title="Nilai DEFECT ditarik dari PLC">${row.defect ?? 0}</span>
+          </div>
+        </td>
+      `;
+    }
 
     tbody.appendChild(tr);
   });
@@ -1312,20 +1719,73 @@ function renderHmiPreview() {
           <span class="hmi-home-tag">${currentHmiPage === 1 ? '10109' : '&nbsp;'}</span>
           <button type="button" class="hmi-btn-arrow-got" onclick="switchHmiPage(${nextPage})" title="Lanjut ke Layar PLAN PRODUCTION ${nextPage}" style="${arrowStyle}">▶</button>
         </div>` : `<div style="visibility: hidden;"><span class="hmi-home-tag">&nbsp;</span><button type="button" style="${arrowStyle}" tabindex="-1">▶</button></div>`;
+    const homeBtnHtml = BRAZING_SEND
+      ? `<button type="button" class="hmi-btn-home-got" onclick="switchBrazingHmiScreen('home')" title="Buka layar B-1:HOME (Live Preview)">HOME</button>`
+      : `<button type="button" class="hmi-btn-home-got" disabled title="Fitur HOME dinonaktifkan" style="opacity: 0.5; cursor: not-allowed;">HOME</button>`;
     navContainer.innerHTML = `
         ${leftHtml}
         <div class="hmi-home-center" style="display: flex; flex-direction: column; align-items: center;">
           <span class="hmi-home-tag">${currentHmiPage === 1 ? '10096' : currentHmiPage === 2 ? '10063' : '&nbsp;'}</span>
-          <button type="button" class="hmi-btn-home-got" disabled title="Fitur HOME dinonaktifkan" style="opacity: 0.5; cursor: not-allowed;">HOME</button>
+          ${homeBtnHtml}
         </div>
         ${rightHtml}
       `;
   }
 }
 
+let brazingHmiScreen = 'plan'; // 'plan' | 'home'
+let brazingHomeMirror = null;
+
+// line (opsional, mis. 'BRAZING-EVA'): tombol PLAN EVAPORATOR / PLAN CONDENSOR di layar HOME.
+// Line lain = pindah halaman seperti dropdown LINE MESIN (?line=EVA / CON).
+window.switchBrazingHmiScreen = function(screen, line) {
+  if (!BRAZING_SEND) return;
+  if (line && line !== currentMachine) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('line', line.replace(/^BRAZING-/, ''));
+    window.location.search = params.toString();
+    return;
+  }
+  brazingHmiScreen = screen === 'home' ? 'home' : 'plan';
+  const planEl = document.getElementById('hmiPlanScreenContent');
+  const homeEl = document.getElementById('hmiBrazingHomeScreen');
+  if (planEl) planEl.style.display = brazingHmiScreen === 'home' ? 'none' : 'block';
+  if (homeEl) homeEl.style.display = brazingHmiScreen === 'home' ? 'block' : 'none';
+  if (brazingHmiScreen === 'home') renderBrazingHomePreview();
+  else renderHmiPreview();
+};
+
+function renderBrazingHomePreview() {
+  if (!BRAZING_SEND) return;
+  const setTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = val;
+  };
+  const live = plcMirrorLive === true && !!brazingHomeMirror;
+  const eva = live && brazingHomeMirror.eva ? brazingHomeMirror.eva : null;
+  const con = live && brazingHomeMirror.con ? brazingHomeMirror.con : null;
+
+  setTxt('bhmEvaLine', eva && eva.line ? eva.line : 'EVAPORATOR BREZZING');
+  setTxt('bhmEvaModel', eva ? (eva.model || '-') : '-');
+  setTxt('bhmEvaProdPlan', eva ? eva.prodPlan : '-');
+  setTxt('bhmEvaActual', eva ? eva.actual : '-');
+  setTxt('bhmEvaPlan', eva ? eva.plan : '-');
+  setTxt('bhmEvaDiff', eva ? eva.difference : '-');
+  setTxt('bhmEvaDefect', eva ? eva.defect : '-');
+
+  setTxt('bhmConLine', con && con.line ? con.line : 'CONDENSOR BREZZING');
+  setTxt('bhmConModel', con ? (con.model || '-') : '-');
+  setTxt('bhmConProdPlan', con ? con.prodPlan : '-');
+  setTxt('bhmConActual', con ? con.actual : '-');
+  setTxt('bhmConPlan', con ? con.plan : '-');
+  setTxt('bhmConDiff', con ? con.difference : '-');
+  setTxt('bhmConDefect', con ? con.defect : '-');
+}
+
 // Tombol "Submit & Kirim ke PLC" (header): simpan isi editor ke database sekarang juga (tanpa menunggu simpan
 // otomatis), lalu kirim ke PLC dengan fungsi yang sama seperti tombol "KONFIRMASI & KIRIM KE PLC".
 window.submitAndDispatch = async function() {
+  if (OFFLINE_MODE && !BRAZING_SEND) return; // mesin tanpa PLC
   const filled = editorDraftRows().length;
   if (filled === 0) {
     showAppModal({
@@ -1369,8 +1829,162 @@ window.submitAndDispatch = async function() {
 
 // Fitur HOME (tulis D1000 = 0 ke PLC) DINONAKTIFKAN: tombol tetap tampil tapi disabled, endpoint backend sudah dihapus.
 
+// Plan Brazing: kirim 120 baris editor (Model, SUT, Prod Plan, Date PSI) ke PLC Brazing lewat api/brazing/plc/send.
+// Baris kosong ikut dikirim supaya sisa plan lama di PLC terhapus.
+async function sendBrazingToPlc() {
+  const btnAll = document.getElementById('btnConfirmDispatchAll');
+  const targetRows = current9Rows.slice(0, TOTAL_PLC_ROWS);
+
+  const noSut = targetRows.filter(r => r.modelName && !(parseInt(r.sut) > 0));
+  if (noSut.length > 0) {
+    const list = noSut.map(r => `Row ${r.rowNo} (${escapeHtml(r.modelName)})`).join(', ');
+    addLog(`[DITAHAN] SUT kosong pada: ${noSut.map(r => `Row ${r.rowNo} (${r.modelName})`).join(', ')}. Data belum dikirim ke PLC.`, 'error');
+    showAppModal({
+      type: 'warning',
+      title: 'SUT Belum Diisi',
+      badge: 'Belum Dikirim',
+      message: `Baris berikut sudah punya model tapi SUT-nya kosong: <strong>${list}</strong>.`,
+      tip: 'Isi SUT manual di editor, atau tambahkan modelnya di halaman Master Data Produk.',
+      buttonText: 'Mengerti'
+    });
+    return;
+  }
+
+  if (btnAll) btnAll.disabled = true;
+  try {
+    addLog(`[KONFIRMASI] Mengirim plan ${PAGE_MACHINE_LABEL} (${targetRows.filter(r => r.modelName).length} model) ke PLC Brazing...`, 'info');
+    const res = await fetch('api/brazing/plc/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Machine: currentMachine,
+        Rows: targetRows.map(r => ({
+          RowNo: r.rowNo,
+          ModelName: r.modelName || '',
+          ProdPlan: parseInt(r.prodPlan) || 0,
+          Sut: parseInt(r.sut) || 0,
+          PlanDate: r.planDate || ''
+        }))
+      })
+    });
+    const result = await res.json();
+    (result.logs || []).forEach(l => addLog(l, l.includes('[GAGAL]') || l.includes('[VALIDASI PERINGATAN]') ? 'error' : l.includes('[VALIDASI OK]') || l.includes('[SUKSES]') ? 'success' : 'info'));
+    if (result.success) {
+      addLog(`[BERHASIL] ${result.message}`, 'success');
+      showAppModal({ type: 'success', title: 'Terkirim ke PLC', message: escapeHtml(result.message), buttonText: 'OK' });
+      await readBrazingPlcRegisters(true);
+    } else {
+      addLog(`[GAGAL] ${result.message || 'Pengiriman gagal.'}`, 'error');
+      showAppModal({
+        type: 'error',
+        title: 'Gagal Kirim ke PLC Brazing',
+        message: escapeHtml(result.message || 'Pengiriman gagal.'),
+        tip: 'Pastikan PC ini terhubung ke jaringan PLC Brazing dan IP / port di appsettings (BrazingPlc) benar.',
+        buttonText: 'Tutup'
+      });
+    }
+  } catch (err) {
+    addLog(`[GAGAL] Kirim ke PLC Brazing: ${err.message}`, 'error');
+    showAppModal({ type: 'error', title: 'Gagal Kirim ke PLC Brazing', message: escapeHtml(err.message), buttonText: 'Tutup' });
+  } finally {
+    if (btnAll) btnAll.disabled = false;
+  }
+}
+
+let _isPollingBrazingPlc = false;
+let _brazingPlcPollingInterval = null;
+
+function startBrazingPlcPolling() {
+  if (_brazingPlcPollingInterval) clearInterval(_brazingPlcPollingInterval);
+  readBrazingPlcRegisters(true);
+  _brazingPlcPollingInterval = setInterval(() => readBrazingPlcRegisters(true), 3000);
+}
+
+// Baca 120 baris register Plan Brazing (Model, SUT, Prod Plan, Actual, Plan SUT, Defect, Date PSI) dari PLC Brazing
+async function readBrazingPlcRegisters(silent = false) {
+  if (!BRAZING_SEND) return;
+  if (_isPollingBrazingPlc && silent) return;
+  _isPollingBrazingPlc = true;
+  try {
+    if (!silent) addLog(`[PLC BRAZING] Menarik data register (${PAGE_MACHINE_LABEL}) dari PLC Brazing...`, 'info');
+    const res = await fetch(`api/brazing/plc/read?machine=${encodeURIComponent(currentMachine)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setPlcMirrorStatus(data.readLive ? 'live' : 'brzfail', data.readAt);
+    plcMirrorLive = !!data.readLive;
+    brazingHomeMirror = data.home || null;
+    const mirror = getPlcMirrorRows();
+    (data.rows || []).forEach(r => {
+      const m = mirror.find(x => x.rowNo === r.rowNo);
+      if (!m) return;
+      m.modelName = (r.modelName || '').trim();
+      m.sut = r.sut || 0;
+      m.prodPlan = r.prodPlan || 0;
+      m.actual = r.actual || 0;
+      m.planSut = r.planSut || 0;
+      m.defect = r.defect || 0;
+      m.planDate = (r.planDate || '').trim();
+      m.ketDefect = (r.ketDefect || '').trim();
+      if (r.modelAddr) m.modelAddr = r.modelAddr;
+      if (r.sutAddr) m.sutAddr = r.sutAddr;
+      if (r.planAddr) m.planAddr = r.planAddr;
+      if (r.actAddr) m.actAddr = r.actAddr;
+      if (r.planSutAddr) m.planSutAddr = r.planSutAddr;
+      if (r.defAddr) m.defAddr = r.defAddr;
+      if (r.dateAddr) m.dateAddr = r.dateAddr;
+      if (r.ketDefectAddr) m.ketDefectAddr = r.ketDefectAddr;
+    });
+    renderHmiPreview();
+    renderBrazingHomePreview();
+
+    if (data.rows && data.rows.length > 0) {
+      data.rows.forEach(r => {
+        const fIdx = current9Rows.findIndex(x => x.rowNo === r.rowNo);
+        const found = current9Rows[fIdx];
+        if (!found) return;
+        found.actual = r.actual || 0;
+        const sameModel = !!found.modelName && plcModelKey(r.modelName) === plcModelKey(found.modelName);
+        if (!sameModel) return;
+        // Defect & Ket Defect di PLC milik model yang sedang berjalan di baris itu
+        found.defect = r.defect || 0;
+        found.ketDefect = (r.ketDefect || '').trim();
+        const defBadge = document.getElementById(`defectBadge_${fIdx}`);
+        if (defBadge) defBadge.innerText = r.defect || 0;
+        const ketEl = document.getElementById(`ketDefect_${fIdx}`);
+        if (ketEl) {
+          ketEl.innerText = found.ketDefect;
+          ketEl.title = `Ket Defect ${found.ketDefectAddr || ''}: ${found.ketDefect}`;
+        }
+      });
+      if (data.ketDefectError && !silent) addLog(`[PLC BRAZING] ${data.ketDefectError}`, 'error');
+    }
+
+    if (!silent) {
+      if (data.readLive) addLog(`[PLC BRAZING] ${data.message}`, 'success');
+      else addLog(`[PLC BRAZING] ${data.message || 'PLC Brazing tidak terbaca.'}`, 'error');
+    }
+  } catch (err) {
+    if (!silent) addLog(`[PLC BRAZING] Gagal membaca PLC Brazing: ${err.message}`, 'error');
+  } finally {
+    _isPollingBrazingPlc = false;
+  }
+}
+
 // Konfirmasi & Kirim ke PLC Mitsubishi MC Protocol (16 Baris: Plan 1 & Plan 2)
 async function dispatchToPlc(row1Only = false) {
+  if (BRAZING_SEND) {
+    if (!row1Only) await sendBrazingToPlc();
+    return;
+  }
+  if (OFFLINE_MODE) {
+    showAppModal({
+      type: 'info',
+      title: 'Belum Terhubung PLC',
+      message: `Plan <strong>${escapeHtml(PAGE_MACHINE_LABEL)}</strong> belum terhubung ke PLC, jadi data tidak dikirim.`,
+      buttonText: 'Mengerti'
+    });
+    return;
+  }
   const btnAll = document.getElementById('btnConfirmDispatchAll');
   const btnP1 = document.getElementById('btnConfirmDispatchP1');
   if (btnAll) btnAll.disabled = true;
@@ -1414,7 +2028,8 @@ async function dispatchToPlc(row1Only = false) {
     const payload = {
       Mode: row1Only ? 'row1_only' : 'all',
       Rows: rowsPayload,
-      ConfirmedBy: 'Operator Web'
+      ConfirmedBy: 'Operator Web',
+      Machine: currentMachine // server menolak mesin selain pemilik PLC (MCH1-01)
     };
 
     const res = await fetch('api/plc/send', {
@@ -1486,6 +2101,7 @@ let _currentPlcDataVersion = -1; // Versi snapshot data PLC yang dipegang browse
 
 // Menarik Nilai Aktual dan Defect dari PLC (GET VALUE & CONDITIONAL CHANGE-DETECTION)
 async function readPlcRegisters(silent = false) {
+  if (OFFLINE_MODE) return; // mesin tanpa PLC: register PLC Expander tidak dibaca
   if (_isPollingPlc && silent) return; // cegah request bertumpuk saat silent polling
   _isPollingPlc = true;
 
@@ -2029,8 +2645,7 @@ function populateMachineDropdowns(machines) {
   // 5. machineSelectFilter & unitTypeFilter (Terkunci Khusus Mesin CU MCH1-01)
   const planMachineSelect = document.getElementById('machineSelectFilter');
   if (planMachineSelect) {
-    planMachineSelect.innerHTML = '<option value="MCH1-01" selected>Expander Kyoshin 6.35</option>';
-    planMachineSelect.value = 'MCH1-01';
+    renderPageMachineSelect(planMachineSelect);
   }
 
   const unitFilter = document.getElementById('unitTypeFilter');

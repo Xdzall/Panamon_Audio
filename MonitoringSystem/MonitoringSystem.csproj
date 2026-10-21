@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -61,10 +61,13 @@
 
   <ItemGroup>
     <PlcRohibSource Include="..\PLC_ROHIB\Plclogger\**\*" Exclude="..\PLC_ROHIB\Plclogger\bin\**;..\PLC_ROHIB\Plclogger\obj\**;..\PLC_ROHIB\Plclogger\publish\**" />
+    <!-- Aturan jadwal istirahat dipakai bersama (dikompilasi juga oleh Plclogger) -->
+    <PlcRohibSource Include="Services/BreakSchedule.cs" />
   </ItemGroup>
 
   <Target Name="BuildPlcRohib" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' And Exists('$(PlcRohibProject)')"
           Inputs="@(PlcRohibSource)" Outputs="$(OutDir)PlcRohib\Plclogger.dll">
+    <Exec Command="taskkill /F /IM Plclogger.exe &gt;nul 2&gt;&amp;1 || exit /b 0" IgnoreExitCode="true" />
     <Exec Command="dotnet publish &quot;$(PlcRohibProject)&quot; -c $(Configuration) -o &quot;$(OutDir)PlcRohib&quot; --nologo -v q" />
   </Target>
 

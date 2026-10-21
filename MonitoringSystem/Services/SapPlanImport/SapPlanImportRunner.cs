@@ -28,6 +28,8 @@ namespace MonitoringSystem.Services.SapPlanImport
         public int RowsNew { get; set; }
         public int RowsRemoved { get; set; }
         public List<string> AliasesUsed { get; set; } = new();
+        /// <summary>Model yang memakai SUT dummy karena tidak ada di MasterData (keterangan, bukan error).</summary>
+        public List<string> DummySutModels { get; set; } = new();
         public List<string> Errors { get; set; } = new();
         public List<SapPlanDaySummary> Days { get; set; } = new();
     }
@@ -163,7 +165,7 @@ namespace MonitoringSystem.Services.SapPlanImport
                 var connStr = _configuration.GetConnectionString("DefaultConnection")
                     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection tidak ada.");
                 var sut = await LoadMasterDataSutAsync(connStr, new[] { opt.CuMachineCode, opt.CsMachineCode }, ct);
-                var calculator = new SapPlanCalculator(sut, aliases);
+                var calculator = new SapPlanCalculator(sut, aliases, opt.FallbackSut);
                 var state = LoadState(stateFolder);
 
                 // List mingguan: file prioritas dibaca sekali. Gagal baca = hanya list mingguan yang gagal, SAP Plan tetap jalan.
@@ -338,6 +340,8 @@ namespace MonitoringSystem.Services.SapPlanImport
                 unit.Normal = rows.Sum(r => r.Normal);
                 unit.Overtime = rows.Sum(r => r.Overtime);
                 unit.AliasesUsed = rows.Where(r => r.Mapping.StartsWith("alias")).Select(r => $"{r.Model} {r.Mapping}").Distinct().OrderBy(x => x).ToList();
+                unit.DummySutModels = rows.Where(r => r.Mapping.StartsWith(SapPlanCalculator.DummyMappingPrefix))
+                    .Select(r => $"{r.Model}: {r.Mapping}").Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
 
                 // Validasi staging
                 if (unit.Errors.Count == 0 && cells.Sum(c => c.Qty) != unit.QtySource) unit.Errors.Add("Total Qty hasil hitung tidak sama dengan total Qty sumber.");
@@ -384,7 +388,8 @@ namespace MonitoringSystem.Services.SapPlanImport
 
                 await CommitAsync(connStr, month, machine, opt.Shift, rows, ct);
                 unit.Status = "Committed";
-                unit.Message = $"SAP Plan {unit.Month} {machine} Shift {opt.Shift} diganti ({unit.Records} record).";
+                unit.Message = $"SAP Plan {unit.Month} {machine} Shift {opt.Shift} diganti ({unit.Records} record)."
+                    + (unit.DummySutModels.Count > 0 ? $" {unit.DummySutModels.Count} model memakai SUT dummy." : "");
                 state[stateKey] = new SapPlanUnitState { Hash = hash, Status = "Committed", At = DateTime.Now, Records = unit.Records, QtySource = unit.QtySource };
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -563,7 +568,7 @@ namespace MonitoringSystem.Services.SapPlanImport
 
         // ── File: alias, state, audit, hasil dry-run ─────────────────────────────
 
-        private static List<SapPlanAlias> LoadAliases(string path)
+        public static List<SapPlanAlias> LoadAliases(string path)
         {
             if (!File.Exists(path)) throw new FileNotFoundException("File alias SAP Plan tidak ditemukan.", path);
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
@@ -601,7 +606,7 @@ namespace MonitoringSystem.Services.SapPlanImport
                     {
                         unit.Month, unit.Sheet, unit.MachineCode, unit.Status, unit.Message, unit.Records, unit.QtySource, unit.Normal, unit.Overtime,
                         unit.DbRecordsBefore, unit.DbQtyBefore, unit.RowsSame, unit.RowsChanged, unit.RowsNew, unit.RowsRemoved,
-                        unit.AliasesUsed, unit.Errors
+                        unit.AliasesUsed, unit.DummySutModels, unit.Errors
                     }
                 };
                 File.AppendAllText(Path.Combine(folder, $"audit-{DateTime.Now:yyyy-MM}.log"), JsonSerializer.Serialize(entry, JsonLine) + Environment.NewLine);

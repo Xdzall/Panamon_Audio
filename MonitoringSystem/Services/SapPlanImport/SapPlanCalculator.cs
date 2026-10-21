@@ -18,15 +18,22 @@ namespace MonitoringSystem.Services.SapPlanImport
     {
         private readonly Dictionary<string, int> _sut;              // "NAMA|MESIN" -> SUT (-1 = ambigu)
         private readonly Dictionary<string, SapPlanAlias> _aliases; // "NAMA EXCEL|MESIN" -> alias
+        private readonly int _fallbackSut;                          // > 0 = SUT dummy untuk model yang tidak ada di MasterData
 
-        public SapPlanCalculator(Dictionary<string, int> sutByNameAndMachine, IEnumerable<SapPlanAlias> aliases)
+        public SapPlanCalculator(Dictionary<string, int> sutByNameAndMachine, IEnumerable<SapPlanAlias> aliases, int fallbackSut = 0)
         {
             _sut = sutByNameAndMachine;
             _aliases = new Dictionary<string, SapPlanAlias>(StringComparer.OrdinalIgnoreCase);
             foreach (var a in aliases) _aliases[Key(a.ExcelName, a.MachineCode)] = a;
+            _fallbackSut = fallbackSut;
         }
 
         public static string Key(string name, string machine) => name.Trim().ToUpperInvariant() + "|" + machine.Trim().ToUpperInvariant();
+
+        /// <summary>Awalan kolom Mapping untuk baris yang memakai SUT dummy (dipakai juga untuk keterangan).</summary>
+        public const string DummyMappingPrefix = "SUT dummy";
+
+        public static string DummyNote(int sut) => $"{DummyMappingPrefix} {sut} dtk (tidak ada di MasterData)";
 
         /// <summary>SUT untuk model di mesin tertentu. Null + pesan bila tidak ada / ambigu.</summary>
         public (int? sut, string mapping, string? error) ResolveSut(string model, string machine)
@@ -40,6 +47,8 @@ namespace MonitoringSystem.Services.SapPlanImport
                     return (sa, $"alias -> {alias.MasterDataName}", null);
                 return (null, "", $"Alias '{model}' -> '{alias.MasterDataName}' ({machine}) tidak punya SUT valid di MasterData.");
             }
+            // Tidak ada di MasterData & belum punya alias: pakai SUT dummy (diberi keterangan) supaya bulan ini tetap ter-import
+            if (_fallbackSut > 0) return (_fallbackSut, DummyNote(_fallbackSut), null);
             return (null, "", $"Model '{model}' ({machine}) tidak ada di MasterData dan belum punya alias.");
         }
 

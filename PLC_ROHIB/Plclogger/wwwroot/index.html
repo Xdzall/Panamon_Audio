@@ -193,7 +193,7 @@
       <div class="brand-section">
         <div class="control-sub-group" style="display: flex; align-items: center; gap: 8px;">
           <label for="machineSelectFilter" class="sub-label" style="font-weight: 700; color: #1d4ed8; font-size: 13px; letter-spacing: 0.3px;">LINE MESIN:</label>
-          <select id="machineSelectFilter" class="modern-filter-select" style="min-width: 170px; font-weight: 700; background: #eff6ff; color: #1d4ed8; border: 1.5px solid #3b82f6;" title="Mesin ini terhubung ke PLC Expander Kyoshin 6.35">
+          <select id="machineSelectFilter" class="modern-filter-select" style="min-width: 170px; font-weight: 700; background-color: #eff6ff; color: #1d4ed8; border: 1.5px solid #3b82f6;" title="Mesin ini terhubung ke PLC Expander Kyoshin 6.35">
             <option value="MCH1-01" selected>Expander Kyoshin 6.35</option>
           </select>
         </div>
@@ -204,7 +204,7 @@
           <span>📤 Submit &amp; Kirim ke PLC</span>
         </button>
         <!-- Isi editor dari list mingguan satu bulan penuh (dbo.PsiWeeklyPlan, diisi worker SAP Plan Panamon) -->
-        <select id="psiMonthSelect" class="modern-filter-select" title="Bulan list rencana yang diisikan ke editor" style="font-weight:700; color:#065f46; border:1.5px solid #059669; background:#ecfdf5;"></select>
+        <select id="psiMonthSelect" class="modern-filter-select" title="Bulan list rencana yang diisikan ke editor" style="font-weight:700; color:#065f46; border:1.5px solid #059669; background-color:#ecfdf5;"></select>
         <button class="btn-sub-action" id="btnResetToDb"
                 title="Isi editor dengan list rencana bulan terpilih (semua minggu, dbo.PsiWeeklyPlan) sesuai urutan list; SUT dari Master Data Produk. Belum dikirim ke PLC."
                 style="background:#059669; color:#fff; border-color:#059669; font-weight:700;">
@@ -337,45 +337,212 @@
 
         <div class="hmi-frame-white">
           <div class="hmi-screen-box">
-            <!-- HEADER BANNER EXACT TO GT DESIGNER SCREEN B-5 -->
-            <div class="hmi-exact-header-banner">
-              <div class="hmi-exact-logo">Panasonic</div>
-              <div class="hmi-exact-title" id="hmiExactTitleText">PLAN PRODUCTION 1</div>
-              <div class="hmi-exact-sys-stamp">
-                <div>10101 100099</div>
-                <div>D2100 D2100</div>
-                <div>10101 10104</div>
-                <div>D2102 D2105</div>
+            <div id="hmiPlanScreenContent">
+              <!-- HEADER BANNER EXACT TO GT DESIGNER SCREEN B-5 -->
+              <div class="hmi-exact-header-banner">
+                <div class="hmi-exact-logo">Panasonic</div>
+                <div class="hmi-exact-title" id="hmiExactTitleText">PLAN PRODUCTION 1</div>
+                <div class="hmi-exact-sys-stamp">
+                  <div>10101 100099</div>
+                  <div>D2100 D2100</div>
+                  <div>10101 10104</div>
+                  <div>D2102 D2105</div>
+                </div>
+              </div>
+
+              <!-- TABLE EXACT TO GT DESIGNER -->
+              <div style="overflow-x: auto;">
+                <table class="hmi-exact-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 58px;">NO</th>
+                      <th>MODEL NAME</th>
+                      <th style="width: 130px;">PROD. PLAN</th>
+                      <th style="width: 100px;">SUT</th>
+                      <th style="width: 130px;">ACTUAL</th>
+                      <th style="width: 120px;">DEFECT</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hmiPreviewBody"></tbody>
+                </table>
+              </div>
+
+              <!-- BOTTOM NAVIGATION (HOME + ARROW EXACT TO SCREEN B-5 & B-?) -->
+              <div class="hmi-bottom-bar-got" id="hmiBottomNavBar" style="padding: 4px 12px;">
+                <div style="width: 80px;"></div>
+                <div class="hmi-home-center" style="display: flex; flex-direction: column; align-items: center;">
+                  <span class="hmi-home-tag">10096</span>
+                  <button type="button" class="hmi-btn-home-got" disabled title="Fitur HOME dinonaktifkan" style="opacity: 0.5; cursor: not-allowed;">HOME</button>
+                </div>
+                <div class="hmi-nav-right" style="display: flex; flex-direction: column; align-items: center;">
+                  <span class="hmi-home-tag">10109</span>
+                  <button type="button" class="hmi-btn-arrow-got" onclick="switchHmiPage(2)" title="Lanjut ke Layar PLAN PRODUCTION 2" style="background:#0284c7; color:white; border:2px solid #38bdf8; border-radius:4px; padding:3px 14px; font-weight:bold; cursor:pointer; font-size:14px;">▶</button>
+                </div>
               </div>
             </div>
 
-            <!-- TABLE EXACT TO GT DESIGNER -->
-            <div style="overflow-x: auto;">
-              <table class="hmi-exact-table">
-                <thead>
+            <!-- SCREEN B-1:HOME BRAZING (READ-ONLY LIVE PREVIEW) -->
+            <div id="hmiBrazingHomeScreen" class="bhm-screen" style="display: none;">
+              <div class="bhm-title-bar">□ B-1:HOME</div>
+              <div class="bhm-header-banner">
+                <div class="hmi-exact-logo">Panasonic</div>
+                <div class="bhm-header-right">
+                  <div class="bhm-alarm-wrap">
+                    <span class="bhm-tag">10246<br>M2</span>
+                    <button type="button" class="bhm-alarm-btn" disabled title="Read-Only Preview (M2 ALARM)">ALARM</button>
+                  </div>
+                  <div class="hmi-exact-sys-stamp">
+                    <div>10260 10259 10258</div>
+                    <div>R2102 R2101 R2100</div>
+                    <div>10261 10262 10263</div>
+                    <div>R2103 R2104 R2105</div>
+                  </div>
+                </div>
+              </div>
+
+              <table class="bhm-grid-table">
+                <tbody>
                   <tr>
-                    <th style="width: 58px;">NO</th>
-                    <th>MODEL NAME</th>
-                    <th style="width: 130px;">PROD. PLAN</th>
-                    <th style="width: 100px;">SUT</th>
-                    <th style="width: 130px;">ACTUAL</th>
-                    <th style="width: 120px;">DEFECT</th>
+                    <td class="bhm-lbl-cell">LINE</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-text">
+                        <span class="bhm-tag">10199<br>D200</span>
+                        <span class="bhm-text-val" id="bhmConLine">CONDENSOR BREZZING</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-text">
+                        <span class="bhm-tag">10250<br>D240</span>
+                        <span class="bhm-text-val" id="bhmEvaLine">EVAPORATOR BREZZING</span>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody id="hmiPreviewBody"></tbody>
+                  <tr>
+                    <td class="bhm-lbl-cell">MODEL</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-text">
+                        <span class="bhm-tag">10251<br>D210</span>
+                        <span class="bhm-text-val" id="bhmConModel">-</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-text">
+                        <span class="bhm-tag">10252<br>D250</span>
+                        <span class="bhm-text-val" id="bhmEvaModel">-</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="bhm-metric-row">
+                    <td class="bhm-lbl-cell">PROD. PLAN</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10223<br>D220</span>
+                        <span class="bhm-num-val" id="bhmConProdPlan">-</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10253<br>D260</span>
+                        <span class="bhm-num-val" id="bhmEvaProdPlan">-</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="bhm-metric-row">
+                    <td class="bhm-lbl-cell">ACTUAL</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10224<br>D222</span>
+                        <span class="bhm-num-val" id="bhmConActual">-</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10254<br>D262</span>
+                        <span class="bhm-num-val" id="bhmEvaActual">-</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="bhm-metric-row">
+                    <td class="bhm-lbl-cell">PLAN</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10225<br>D223</span>
+                        <span class="bhm-num-val" id="bhmConPlan">-</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num">
+                        <span class="bhm-tag">10255<br>D263</span>
+                        <span class="bhm-num-val" id="bhmEvaPlan">-</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="bhm-metric-row bhm-metric-last">
+                    <td class="bhm-lbl-cell">DIFFERENCE</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num bhm-box-diff">
+                        <span class="bhm-tag">10226<br>D198</span>
+                        <span class="bhm-num-val" id="bhmConDiff">-</span>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-box bhm-box-num bhm-box-diff">
+                        <span class="bhm-tag">10256<br>D199</span>
+                        <span class="bhm-num-val" id="bhmEvaDiff">-</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="bhm-defect-row">
+                    <td class="bhm-lbl-cell bhm-lbl-defect">DEFECT</td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-defect-group">
+                        <div class="bhm-box bhm-box-defect">
+                          <span class="bhm-tag">10272<br>D224</span>
+                          <span class="bhm-num-val bhm-val-defect" id="bhmConDefect">-</span>
+                        </div>
+                        <div class="bhm-arrow-wrap">
+                          <span class="bhm-tag">10274<br>M50</span>
+                          <button type="button" class="bhm-arrow-btn" disabled title="Read-Only Preview (M50)">▲</button>
+                        </div>
+                        <div class="bhm-arrow-wrap">
+                          <span class="bhm-tag">10275<br>M51</span>
+                          <button type="button" class="bhm-arrow-btn" disabled title="Read-Only Preview (M51)">▼</button>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="bhm-val-cell">
+                      <div class="bhm-defect-group">
+                        <div class="bhm-box bhm-box-defect">
+                          <span class="bhm-tag">10273<br>D264</span>
+                          <span class="bhm-num-val bhm-val-defect" id="bhmEvaDefect">-</span>
+                        </div>
+                        <div class="bhm-arrow-wrap">
+                          <span class="bhm-tag">10276<br>M52</span>
+                          <button type="button" class="bhm-arrow-btn" disabled title="Read-Only Preview (M52)">▲</button>
+                        </div>
+                        <div class="bhm-arrow-wrap">
+                          <span class="bhm-tag">10277<br>M53</span>
+                          <button type="button" class="bhm-arrow-btn" disabled title="Read-Only Preview (M53)">▼</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
               </table>
-            </div>
 
-            <!-- BOTTOM NAVIGATION (HOME + ARROW EXACT TO SCREEN B-5 & B-?) -->
-            <div class="hmi-bottom-bar-got" id="hmiBottomNavBar" style="padding: 4px 12px;">
-              <div style="width: 80px;"></div>
-              <div class="hmi-home-center" style="display: flex; flex-direction: column; align-items: center;">
-                <span class="hmi-home-tag">10096</span>
-                <button type="button" class="hmi-btn-home-got" disabled title="Fitur HOME dinonaktifkan" style="opacity: 0.5; cursor: not-allowed;">HOME</button>
-              </div>
-              <div class="hmi-nav-right" style="display: flex; flex-direction: column; align-items: center;">
-                <span class="hmi-home-tag">10109</span>
-                <button type="button" class="hmi-btn-arrow-got" onclick="switchHmiPage(2)" title="Lanjut ke Layar PLAN PRODUCTION 2" style="background:#0284c7; color:white; border:2px solid #38bdf8; border-radius:4px; padding:3px 14px; font-weight:bold; cursor:pointer; font-size:14px;">▶</button>
+              <div class="bhm-bottom-nav">
+                <div class="bhm-nav-item">
+                  <span class="bhm-nav-tag">10235</span>
+                  <button type="button" class="bhm-nav-btn" onclick="switchBrazingHmiScreen('plan', 'BRAZING-EVA')" title="Buka tabel Plan Production Evaporator">PLAN EVAPORATOR</button>
+                </div>
+                <div class="bhm-nav-item">
+                  <span class="bhm-nav-tag">10232</span>
+                  <button type="button" class="bhm-nav-btn bhm-nav-menu" disabled title="Read-Only Preview (MENU)">MENU</button>
+                </div>
+                <div class="bhm-nav-item">
+                  <span class="bhm-nav-tag">10257</span>
+                  <button type="button" class="bhm-nav-btn" onclick="switchBrazingHmiScreen('plan', 'BRAZING-CON')" title="Buka tabel Plan Production Condenser">PLAN CONDENSOR</button>
+                </div>
               </div>
             </div>
           </div>

@@ -36,6 +36,10 @@ namespace MonitoringSystem.Services.SapPlanImport
         /// <summary>Kapasitas Normal NS per hari per mesin (473 menit).</summary>
         public int CapacitySeconds { get; set; } = 28380;
 
+        /// <summary>SUT (detik) pengganti untuk model yang tidak ada di MasterData dan belum punya alias, supaya import
+        /// bulan itu tidak gagal. Model ini diberi keterangan (audit, CSV, halaman Preview SAP). 0 = tetap gagal seperti dulu.</summary>
+        public int FallbackSut { get; set; } = 35;
+
         public string Shift { get; set; } = "NS";
         public string CuMachineCode { get; set; } = "MCH1-01";
         public string CsMachineCode { get; set; } = "MCH1-02";

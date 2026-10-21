@@ -52,3 +52,10 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_PlcKyoshinLossEvent_Open' AND object_id = OBJECT_ID(N'dbo.PlcKyoshinLossEvent'))
     CREATE UNIQUE INDEX UX_PlcKyoshinLossEvent_Open ON dbo.PlcKyoshinLossEvent (MachineCode) WHERE EndAt IS NULL;
 GO
+
+-- 2026-10-07: durasi loss tanpa jam istirahat. Timer R103 tetap berjalan saat istirahat; bagian loss yang jatuh di
+-- jadwal istirahat Panamon (MonitoringSystem/Services/BreakSchedule.cs) tidak dihitung. Diisi Plclogger tiap menit
+-- (kejadian lama yang masih NULL ikut dihitung). DurationMin asli tetap disimpan; halaman AC OEE memakai NetDurationMin.
+IF COL_LENGTH(N'dbo.PlcKyoshinLossEvent', N'NetDurationMin') IS NULL
+    ALTER TABLE dbo.PlcKyoshinLossEvent ADD NetDurationMin INT NULL;
+GO

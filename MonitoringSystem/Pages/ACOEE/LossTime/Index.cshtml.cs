@@ -621,8 +621,9 @@ namespace MonitoringSystem.Pages.ACOEE.LossTime
                 using var conn = new SqlConnection(connectionString);
                 conn.Open();
                 var rows = new List<(LossTimeRecord Record, bool Continuation, bool Running, string ReasonDetail, DateTime GroupStart, DateTime? GroupEnd)>();
-                using (var cmd = new SqlCommand(@"
-                    SELECT e.ProductionDate, e.ShiftNo, e.Model, e.StartAt, e.EndAt, e.DurationMin, e.ReasonName, e.ReasonDetail,
+                var dur = AcOeeLossDuration.Expr(conn, "e"); // tanpa jam istirahat
+                using (var cmd = new SqlCommand($@"
+                    SELECT e.ProductionDate, e.ShiftNo, e.Model, e.StartAt, e.EndAt, {dur} AS DurationMin, e.ReasonName, e.ReasonDetail,
                            e.Id, ISNULL(e.GroupId, e.Id) AS GroupId, g.GroupStart, g.GroupEnd
                     FROM dbo.PlcKyoshinLossEvent e
                     CROSS APPLY (
@@ -630,7 +631,7 @@ namespace MonitoringSystem.Pages.ACOEE.LossTime
                                CASE WHEN COUNT(*) = COUNT(x.EndAt) THEN MAX(x.EndAt) END AS GroupEnd -- NULL = loss masih berjalan
                         FROM dbo.PlcKyoshinLossEvent x
                         WHERE ISNULL(x.GroupId, x.Id) = ISNULL(e.GroupId, e.Id)) g
-                    WHERE e.MachineCode = 'MCH1-01' AND e.ProductionDate BETWEEN @StartDate AND @EndDate AND e.DurationMin > 0
+                    WHERE e.MachineCode = 'MCH1-01' AND e.ProductionDate BETWEEN @StartDate AND @EndDate AND {dur} > 0
                     ORDER BY e.StartAt", conn))
                 {
                     cmd.Parameters.AddWithValue("@StartDate", start.Date);

@@ -7,14 +7,19 @@
     var movePath = (Context.Request.Path.Value ?? string.Empty).ToLowerInvariant();
     string currentModule =
         movePath.StartsWith("/cac") ? "CAC" :
-        (movePath.StartsWith("/acoee") || movePath.StartsWith("/planmachine")) ? "MACHINE" :
+        (movePath.StartsWith("/acoee") || movePath.StartsWith("/planmachine") || movePath.StartsWith("/planbrazing") || movePath.StartsWith("/planfinpress")) ? "MACHINE" :
         "RAC";
+
+    // Ikon RAC & CAC sebagai SVG langsung (tanpa library/internet):
+    //   RAC = Tabler "air-conditioning" (MIT), CAC = Material Symbols "air_purifier_gen" (Apache 2.0)
+    const string racSvg = "<svg class=\"move-card-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 16a3 3 0 0 1 -3 3\"/><path d=\"M16 16a3 3 0 0 0 3 3\"/><path d=\"M12 16v4\"/><path d=\"M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2l0 -4\"/><path d=\"M7 13v-3a1 1 0 0 1 1 -1h8a1 1 0 0 1 1 1v3\"/></svg>";
+    const string cacSvg = "<svg class=\"move-card-icon\" viewBox=\"0 -960 960 960\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M120-120v-600q0-50 35-85t85-35h160q50 0 85 35t35 85v600H120Zm280-240h40v-200h-40v200ZM200-200h240v-80h-40q-33 0-56.5-23.5T320-360v-200q0-33 23.5-56.5T400-640h40v-80q0-17-11.5-28.5T400-760H240q-17 0-28.5 11.5T200-720v520Zm488-217q-26 0-51-7t-49-18l25-76q20 9 39.5 15t36.5 6q12 0 24-4t25-12q24-17 48-23t46-6q25 0 51.5 6.5T933-518l-25 76q-23-8-42.5-14t-33.5-6q-12 0-26.5 4.5T775-442q-21 14-42.5 19.5T688-417Zm1-156q-26 0-52-7t-49-18l25-76q26 11 44 16t32 5q12 0 24-3.5t25-12.5q25-17 48.5-23t45.5-6q25 0 50 6.5t51 17.5l-25 76q-26-9-44-14.5t-32-5.5q-13 0-26.5 4T775-598q-18 13-40.5 19t-45.5 6Zm0 312q-26 0-51.5-7T588-286l25-76q22 10 41 15.5t35 5.5q12 0 24-3.5t25-12.5q23-16 49-22.5t46-6.5q25 0 51 7t49 17l-25 76q-26-9-44.5-14.5T832-306q-14 0-28.5 4.5T775-286q-17 12-39.5 18.5T689-261Zm-249 61v-528.5 8.5-8.5V-200Z\"/></svg>";
 
     var moveTargets = new[]
     {
-        new { Key = "RAC", Href = "/ProductionReport/index", Icon = "fa-snowflake", Desc = "Production Monitoring", Css = "move-card-rac" },
-        new { Key = "CAC", Href = "/CAC/ProductionReport/index", Icon = "fa-wind", Desc = "Production Monitoring CAC", Css = "move-card-cac" },
-        new { Key = "MACHINE", Href = "/ACOEE/dashboard", Icon = "fa-gears", Desc = "AC OEE Machine", Css = "move-card-machine" }
+        new { Key = "RAC", Href = "/ProductionReport/index", Icon = "", Svg = racSvg, Desc = "Production Monitoring RAC", Css = "move-card-rac" },
+        new { Key = "CAC", Href = "/CAC/ProductionReport/index", Icon = "", Svg = cacSvg, Desc = "Production Monitoring CAC", Css = "move-card-cac" },
+        new { Key = "MACHINE", Href = "/ACOEE/dashboard", Icon = "fa-gears", Svg = "", Desc = "Production Monitoring Machine", Css = "move-card-machine" }
     }.Where(t => t.Key != currentModule);
 }
 
@@ -27,7 +32,14 @@
         @foreach (var t in moveTargets)
         {
             <a class="move-card @t.Css" href="@t.Href" role="menuitem">
-                <i class="fa-solid @t.Icon"></i>
+                @if (t.Svg.Length > 0)
+                {
+                    @Html.Raw(t.Svg)
+                }
+                else
+                {
+                    <i class="fa-solid @t.Icon"></i>
+                }
                 <span class="move-card-name">@t.Key</span>
                 <span class="move-card-desc">@t.Desc</span>
             </a>
@@ -100,8 +112,16 @@
         opacity: .65;
     }
 
-    #bdSidebar .sidebar-move-popup .move-card-rac i { color: #4fc3f7 !important; }
-    #bdSidebar .sidebar-move-popup .move-card-cac i { color: #f39c12 !important; }
+    #bdSidebar .sidebar-move-popup .move-card-icon {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+    }
+
+    #bdSidebar .sidebar-move-popup .move-card-rac i,
+    #bdSidebar .sidebar-move-popup .move-card-rac .move-card-icon { color: #4fc3f7 !important; }
+    #bdSidebar .sidebar-move-popup .move-card-cac i,
+    #bdSidebar .sidebar-move-popup .move-card-cac .move-card-icon { color: #f39c12 !important; }
     #bdSidebar .sidebar-move-popup .move-card-machine i { color: #2ecc71 !important; }
 
     #bdSidebar .nav-item .sidebar-move-popup a.move-card-rac:hover {

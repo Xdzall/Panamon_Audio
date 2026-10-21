@@ -7,6 +7,8 @@
 <style>
     /* Meniru lembar Excel PWK: garis tipis, header hijau muda, font kecil. */
     .pwk {
+        /* Diperbesar otomatis di layar lebar / zoom browser kecil (lihat fitPwkToScreen); print memakai zoom sendiri */
+        zoom: var(--pwk-screen-zoom, 1);
         font-family: Arial, Helvetica, sans-serif;
         font-size: 11px;
         color: #000;
@@ -100,6 +102,21 @@
             padding: 2px;
         }
 
+        /* Ikon kalender Tanggal: site.css (tema gelap) membuatnya putih (invert), jadi hilang di lembar PWK yang putih */
+        /* Ikon diganti gambar kalender hitam bergaris sedang (ikon bawaan browser terlalu tipis & tidak bisa ditebalkan) */
+        body .pwk .filter input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: none !important;
+            opacity: 1 !important;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='2'/%3E%3Cpath d='M8 3v4M16 3v4M3.5 10h17'/%3E%3Cpath d='M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+        }
+
+        .pwk .filter input[type="date"] {
+            cursor: pointer;
+        }
+
         .pwk .rot {
             height: 150px;
             vertical-align: bottom;
@@ -142,8 +159,23 @@
             gap: 12px;
             flex-wrap: wrap;
             align-items: end;
-            margin-bottom: 10px;
+            margin-bottom: 18px; /* ruang untuk keterangan kecil di bawah Jumlah OPR */
         }
+
+        /* Keterangan Jumlah OPR menggantung di bawah kotaknya, supaya kotak tetap sejajar dengan isian lain */
+        .pwk .bar .opr-field {
+            position: relative;
+        }
+
+            .pwk .bar .opr-field .opr-hint {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                margin-top: 2px;
+                font-size: 9px;
+                color: #555;
+                white-space: nowrap;
+            }
 
             .pwk .bar label {
                 display: block;
@@ -156,6 +188,50 @@
             font: inherit;
             cursor: pointer;
         }
+
+        /* Tombol Unduh: satu tombol, pilihan Excel / PDF A4 / Print A4 muncul di bawahnya */
+        .pwk .unduh-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+            .pwk .unduh-menu .unduh-list {
+                display: none;
+                position: absolute;
+                top: calc(100% + 3px);
+                right: 0;
+                z-index: 20;
+                min-width: 100%;
+                flex-direction: column;
+                gap: 3px;
+                padding: 4px;
+                background: #fff;
+                border: 1px solid #7a7a7a;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+            }
+
+            .pwk .unduh-menu.open .unduh-list {
+                display: flex;
+            }
+
+            /* Panah dropdown tombol Unduh dibuat lebih besar & berputar saat menu terbuka */
+            .pwk .unduh-menu .unduh-caret {
+                display: inline-block;
+                margin-left: 4px;
+                font-size: 1.6em;
+                line-height: 0;
+                vertical-align: -0.12em;
+                transition: transform .15s ease;
+            }
+
+            .pwk .unduh-menu.open .unduh-caret {
+                transform: rotate(180deg);
+            }
+
+            .pwk .unduh-menu .unduh-list button {
+                white-space: nowrap;
+                text-align: left;
+            }
 
         .pwk .rekap {
             display: flex;
@@ -359,6 +435,11 @@
             font-size: 7px !important;
         }
 
+        /* Keterangan isian Jumlah OPR tidak ikut dicetak */
+        .pwk .bar .opr-field .opr-hint {
+            display: none !important;
+        }
+
         .pwk .filter input,
         .pwk .filter select,
         .pwk input,
@@ -395,6 +476,11 @@
             padding: 4px 7px !important;
         }
 
+
+        /* Ikon kalender tidak ikut dicetak */
+        .pwk .filter input[type="date"]::-webkit-calendar-picker-indicator {
+            display: none !important;
+        }
     }
 </style>
 
@@ -499,11 +585,11 @@
             {
                 <input type="hidden" name="SabtuMode" value="@Model.SabtuMode" />
             }
-            <div>
+            <div class="opr-field">
                 <label>Jumlah OPR</label>
                 <input type="number" min="0" id="jumlahOpr" name="JumlahOpr" value="@Model.JumlahOpr"
                        oninput="oprManual = true; hitungRekap();" />
-                <div style="font-size:9px;color:#555">kosongkan untuk ikut Given Time</div>
+                <div class="opr-hint">kosongkan untuk ikut Given Time</div>
             </div>
             <div>
                 <label>Waktu Kerja (A)</label>
@@ -512,9 +598,14 @@
             <div class="print-hide">
                 <button type="submit" asp-page-handler="Load">Muat data</button>
                 <button type="submit" asp-page-handler="Save">Simpan PWK</button>
-                <button type="submit" asp-page-handler="DownloadExcel" onclick="preparePwKOutput()">Unduh Excel</button>
-                <button type="submit" asp-page-handler="DownloadPdf" onclick="preparePwKOutput()">Unduh PDF A4</button>
-                <button type="submit" asp-page-handler="PrintPdf" formtarget="_blank" onclick="preparePwKOutput()">Print A4</button>
+                <div class="unduh-menu" id="unduhMenu">
+                    <button type="button" id="unduhToggle" aria-haspopup="true" aria-expanded="false" onclick="toggleUnduhMenu(event)">Unduh <span class="unduh-caret" aria-hidden="true">&#9662;</span></button>
+                    <div class="unduh-list" role="menu">
+                        <button type="submit" role="menuitem" asp-page-handler="DownloadExcel" onclick="preparePwKOutput(); setTimeout(closeUnduhMenu, 0);">Unduh Excel</button>
+                        <button type="submit" role="menuitem" asp-page-handler="DownloadPdf" onclick="preparePwKOutput(); setTimeout(closeUnduhMenu, 0);">Unduh PDF A4</button>
+                        <button type="submit" role="menuitem" asp-page-handler="PrintPdf" formtarget="_blank" onclick="preparePwKOutput(); setTimeout(closeUnduhMenu, 0);">Print A4</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -802,6 +893,46 @@
 
 <script>
     function reload() { document.getElementById('pwkForm').submit(); }
+
+    // Lembar PWK mengikuti lebar layar: di zoom browser kecil (mis. 80%) isinya diperbesar supaya
+    // tampil sama seperti zoom 110% (layar 1920 px pada zoom 110% = lebar 1745 px, ukuran yang sudah pas).
+    // Tidak pernah diperkecil; zoom browser lebih besar tetap seperti biasa. Print / PDF tidak terpengaruh.
+    (function fitPwkToScreen() {
+        var BASE_WIDTH = 1745;
+        function fit() {
+            var z = Math.min(1.6, Math.max(1, window.innerWidth / BASE_WIDTH));
+            document.documentElement.style.setProperty('--pwk-screen-zoom', z.toFixed(3));
+        }
+        fit();
+        window.addEventListener('resize', fit); // ganti zoom browser juga memicu resize
+    })();
+
+    // Menu tombol Unduh: buka/tutup, tertutup saat klik di luar atau tekan Esc
+    function toggleUnduhMenu(e) {
+        e.stopPropagation();
+        var menu = document.getElementById('unduhMenu');
+        var open = menu.classList.toggle('open');
+        document.getElementById('unduhToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    function closeUnduhMenu() {
+        var menu = document.getElementById('unduhMenu');
+        if (!menu) return;
+        menu.classList.remove('open');
+        document.getElementById('unduhToggle').setAttribute('aria-expanded', 'false');
+    }
+    document.addEventListener('click', function (e) {
+        var menu = document.getElementById('unduhMenu');
+        if (menu && !menu.contains(e.target)) closeUnduhMenu();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeUnduhMenu(); });
+
+    // Klik di mana saja pada kotak Tanggal langsung membuka kalender (tidak harus tepat di ikonnya).
+    // Browser lama tanpa showPicker() tetap bisa memakai ikon / mengetik tanggal seperti biasa.
+    document.querySelectorAll('.pwk .filter input[type="date"]').forEach(function (el) {
+        el.addEventListener('click', function () {
+            try { if (typeof el.showPicker === 'function') el.showPicker(); } catch (e) { /* kalender sudah terbuka */ }
+        });
+    });
 
     function preparePwKOutput() {
         // Sinkronkan kalkulasi tampilan sebelum form dikirim ke pembuat PDF/print.

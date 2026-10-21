@@ -56,10 +56,12 @@
             <span class="nav-label">Inventory</span>
         </a>
     </li>
+    <!-- PLAN MACHINE: langsung ke Plan Expander Kyoshin 6.35; pindah ke Brazing / Fin Press lewat pilihan SOURCE di halaman Plan -->
     <li class="nav-item">
-        <a href="/planmachine" class="@ActiveWhen("/planmachine")">
+        <a href="/planmachine" title="Plan Machine"
+           class="@(ActiveWhen("/planmachine") + ActiveWhen("/planbrazing") + ActiveWhen("/planfinpress"))">
             <i class="fa-solid fa-network-wired"></i>
-            <span class="nav-label">Plan<br>Exp 6.35</span>
+            <span class="nav-label">Plan<br>Machine</span>
         </a>
     </li>
     <!-- MOVE MENU (pindah RAC / CAC / MACHINE) -->

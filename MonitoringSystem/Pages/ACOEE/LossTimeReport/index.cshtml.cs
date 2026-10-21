@@ -294,10 +294,11 @@ namespace MonitoringSystem.Pages.ACOEE.LossTimeReport
             {
                 using var conn = new SqlConnection(_connectionString);
                 conn.Open();
-                using var cmd = new SqlCommand(@"
-                    SELECT MONTH(ProductionDate) AS Month, ISNULL(ReasonName, '') AS Reason, SUM(DurationMin) AS TotalMinutes
+                var dur = AcOeeLossDuration.Expr(conn); // tanpa jam istirahat
+                using var cmd = new SqlCommand($@"
+                    SELECT MONTH(ProductionDate) AS Month, ISNULL(ReasonName, '') AS Reason, SUM({dur}) AS TotalMinutes
                     FROM dbo.PlcKyoshinLossEvent
-                    WHERE MachineCode = 'MCH1-01' AND DurationMin > 0
+                    WHERE MachineCode = 'MCH1-01' AND {dur} > 0
                       AND ProductionDate >= @start AND ProductionDate < @end
                     GROUP BY MONTH(ProductionDate), ISNULL(ReasonName, '')", conn);
                 cmd.Parameters.AddWithValue("@start", new DateTime(fiscalYear, 4, 1));

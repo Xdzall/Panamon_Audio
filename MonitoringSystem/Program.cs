@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MonitoringSystem.Hubs;
@@ -18,7 +19,11 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<MonitoringSystem.Services.BreakTimeService>();
-builder.Services.AddRazorPages()
+builder.Services.AddRazorPages(options =>
+    {
+        // SubPanamon (/subpanamon: PWK Actual, Machine Efficiency, PWK) dibuka tanpa login Panamon
+        options.Conventions.AllowAnonymousToFolder("/SubPanamon");
+    })
     .AddMvcOptions(options =>
     {
         options.Filters.Add<AuthorizeFilter>();
@@ -46,6 +51,13 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
     options.CheckConsentNeeded = context => true;
     options.MinimumSameSitePolicy = SameSiteMode.None;
 });
+
+// Kunci enkripsi cookie login disimpan di disk (App_Data\DataProtection-Keys). Tanpa ini IIS menyimpannya di memori:
+// setiap IIS / app pool restart kunci berganti, cookie lama tidak terbaca, dan semua halaman (termasuk /subpanamon)
+// minta login lagi. Folder ini harus bisa ditulis oleh identitas app pool IIS dan jangan dihapus saat deploy.
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "DataProtection-Keys")))
+    .SetApplicationName("Panamon");
 
 builder.Services.ConfigureApplicationCookie(options =>
 {

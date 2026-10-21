@@ -1,7 +1,7 @@
 @page
 @model MonitoringSystem.Pages.ACOEE.Performance.IndexModel
 @{
-    // Tampilan sama dengan Performance Assembly; data Expander Kyoshin 6.35 dari PLC (lihat Index.cshtml.cs)
+    // Tampilan sama dengan Performance Assembly; data PLC Expander Kyoshin 6.35 / Brazing Evaporator / Condenser (lihat Index.cshtml.cs)
     ViewData["Title"] = "Performance";
     ViewData["ExtraHead"] = "<style>.perf-panel-title,.perf-th,.perf-td{font-display:swap}</style>";
     var d = Model.Data;
@@ -570,8 +570,11 @@
         <div class="row">
             <div class="col-5 d-flex gap-2 align-items-center">
                 <label class="fw-bold fs-5 perf-label">MACHINE</label>
-                <select class="form-select border-2 fs-5 fw-bold perf-select" id="MachineCode">
-                    <option value="MCH1-01">Expander Kyoshin 6.35</option>
+                <select class="form-select border-2 fs-5 fw-bold perf-select" id="MachineCode" name="MachineCode">
+                    @foreach (var m in MonitoringSystem.Pages.ACOEE.Performance.IndexModel.Machines)
+                    {
+                        <option value="@m.Code" selected="@(m.Code == Model.MachineCode)">@m.Name</option>
+                    }
                 </select>
             </div>
             <div class="col-5 d-flex gap-2 align-items-center">
@@ -606,7 +609,7 @@
                         <td class="perf-td fs-4 fw-bold w-50 py-3 @(d.DifferenceProd < 0 ? "text-danger" : "")" id="val-differenceProd">@Signed(d.DifferenceProd)</td>
                     </tr>
                     <tr>
-                        <td colspan="2" class="perf-th fs-4 fw-bold w-50 py-3" title="Actual / Target x 100">EFFICIENCY</td>
+                        <td colspan="2" class="perf-th fs-4 fw-bold w-50 py-3" title="Actual / Target x 100">ABILITY RATIO</td>
                         <td class="perf-td fs-4 fw-bold w-50 py-3" id="val-efficiencyValue">@d.EfficiencyValue %</td>
                     </tr>
                     <tr>
@@ -1136,10 +1139,12 @@
                 refreshInProgress = true;
                 try {
                     const selectedDate = document.querySelector('input[name="SelectedDate"]').value;
+                    const machineCode = document.getElementById('MachineCode').value;
                     const currentUrl = window.location.pathname;
                     const query = new URLSearchParams({
                         handler: 'UpdatedData',
-                        selectedDate
+                        selectedDate,
+                        machineCode
                     });
                     const url = `${currentUrl}?${query.toString()}`;
                     

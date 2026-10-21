@@ -5,16 +5,27 @@ using Microsoft.Data.SqlClient;
 
 namespace MonitoringSystem.Pages.ACOEE.Performance
 {
-    // Performance AC OEE = tampilan Performance Assembly, data Expander Kyoshin 6.35 (MCH1-01) dari PLC:
-    //   dbo.PlcKyoshinTrend      : layar utama GOT per menit (R10 model, R20 prod. plan, R23 plan by SUT, R22 actual, R24 defect)
-    //   dbo.PlcKyoshinLossEvent  : loss time (timer R103), sudah dipotong per shift
-    //   dbo.MasterProduct        : SUT per model (Machine = Expander Kyoshin 6.35)
+    // Performance AC OEE = tampilan Performance Assembly, data mesin dari PLC (dicatat Plclogger):
+    //   dbo.PlcKyoshinTrend      : layar utama GOT per menit, per MachineCode
+    //                              Expander (MCH1-01): R10 model, R20 prod. plan, R23 plan by SUT, R22 actual, R24 defect
+    //                              Brazing (BRAZING-CON / BRAZING-EVA): layar HOME D210/D250 model, D220/D260 prod. plan,
+    //                              D223/D263 plan SUT, D222/D262 actual, D224/D264 defect
+    //   dbo.PlcKyoshinLossEvent  : loss time (Expander: timer R103), sudah dipotong per shift; Brazing belum ada address loss
+    //   dbo.MasterProduct        : SUT per model (Machine = nama mesin di Master Data Produk)
     //   BreakTimeService         : jadwal istirahat, untuk working time
     // Hari produksi 07:00 - 07:00 besoknya; shift 1 = 07:00-15:45, 2 = 15:45-23:15, 3 = 23:15-07:00.
     public class IndexModel : PageModel
     {
-        public const string MachineCode = "MCH1-01";
-        public const string MachineName = "Expander Kyoshin 6.35";
+        public const string DefaultMachineCode = "MCH1-01";
+
+        // Pilihan MACHINE: kode di dbo.PlcKyoshinTrend -> nama tampil & nama mesin Master Data Produk (SUT)
+        public static readonly (string Code, string Name, string MasterMachine)[] Machines =
+        {
+            ("MCH1-01", "Expander Kyoshin 6.35", "Expander Kyoshin 6.35"),
+            ("BRAZING-EVA", "Evaporator", "Evaporator"),
+            ("BRAZING-CON", "Condenser", "Condenser")
+        };
+
         private const int CycleWindowMinutes = 5;   // actual cycle = rata-rata 5 menit terakhir (data PLC per menit)
         private const int MaxSampleGapMinutes = 3;  // jeda sampel lebih lama = logger/PLC mati, cycle tidak dihitung melewatinya
 
@@ -39,6 +50,13 @@ namespace MonitoringSystem.Pages.ACOEE.Performance
         // Tanpa filter shift: satu hari produksi penuh (07:00 - 07:00 besoknya)
         [BindProperty(SupportsGet = true)]
         public DateTime? SelectedDate { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? MachineCode { get; set; }
+
+        private (string Code, string Name, string MasterMachine) SelectedMachine =>
+            Machines.FirstOrDefault(m => string.Equals(m.Code, MachineCode, StringComparison.OrdinalIgnoreCase)) is { Code: not null } found
+                ? found : Machines[0];
 
         public PerformanceData Data { get; private set; } = new();
 
@@ -106,6 +124,7 @@ namespace MonitoringSystem.Pages.ACOEE.Performance
             if (SelectedDate == null || SelectedDate.Value.Year is < 2000 or > 2100)
                 SelectedDate = ProductionShiftOf(now).Date;
             SelectedDate = SelectedDate.Value.Date;
+            MachineCode = SelectedMachine.Code; // kode tidak dikenal = Expander
         }
 
         public sealed record Sample(DateTime At, string Model, int R20, int R23, int R22, int R24);
@@ -126,8 +145,9 @@ namespace MonitoringSystem.Pages.ACOEE.Performance
             {
                 await using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
+                var dur = MonitoringSystem.Pages.ACOEE.AcOeeLossDuration.Expr(conn); // loss tanpa jam istirahat
 
-                await using (var cmd = new SqlCommand(@"
+                await using (var cmd = new SqlCommand($@"
                     SELECT SampleAt, Model, ProdPlan, PlanBySut, Actual, Defect FROM (
                         SELECT SampleAt, LTRIM(RTRIM(Model)) AS Model, ProdPlan, PlanBySut, Actual, Defect,
                                ROW_NUMBER() OVER (PARTITION BY LTRIM(RTRIM(Model)), ProdPlan ORDER BY SampleAt DESC) AS rn
@@ -137,16 +157,16 @@ namespace MonitoringSystem.Pages.ACOEE.Performance
                     SELECT SampleAt, Model, ProdPlan, PlanBySut, Actual, Defect FROM dbo.PlcKyoshinTrend
                     WHERE MachineCode = @mc AND SampleAt >= @from AND SampleAt < @to
                     ORDER BY SampleAt;
-                    SELECT ISNULL(SUM(DurationMin), 0) FROM dbo.PlcKyoshinLossEvent
+                    SELECT ISNULL(SUM({dur}), 0) FROM dbo.PlcKyoshinLossEvent
                     WHERE MachineCode = @mc AND ProductionDate = @pd AND (@shift = 0 OR ShiftNo = @shift);
                     SELECT LTRIM(RTRIM(Model)), Sut FROM dbo.MasterProduct WHERE Machine = @machineName AND Sut > 0;", conn))
                 {
-                    cmd.Parameters.Add("@mc", SqlDbType.NVarChar, 20).Value = MachineCode;
+                    cmd.Parameters.Add("@mc", SqlDbType.NVarChar, 20).Value = SelectedMachine.Code;
                     cmd.Parameters.Add("@from", SqlDbType.DateTime2).Value = windowStart;
                     cmd.Parameters.Add("@to", SqlDbType.DateTime2).Value = windowEnd;
                     cmd.Parameters.Add("@pd", SqlDbType.Date).Value = productionDate.Date;
                     cmd.Parameters.Add("@shift", SqlDbType.Int).Value = shift;
-                    cmd.Parameters.Add("@machineName", SqlDbType.VarChar, 100).Value = MachineName;
+                    cmd.Parameters.Add("@machineName", SqlDbType.VarChar, 100).Value = SelectedMachine.MasterMachine;
                     await using var r = await cmd.ExecuteReaderAsync();
                     Sample Read() => new(r.GetDateTime(0), (r.IsDBNull(1) ? "" : r.GetString(1)).Trim(),
                         r.GetInt32(2), r.GetInt32(3), r.GetInt32(4), r.GetInt32(5));
@@ -162,7 +182,7 @@ namespace MonitoringSystem.Pages.ACOEE.Performance
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AC OEE Performance: gagal membaca data PLC Expander {Date:yyyy-MM-dd} shift {Shift}", productionDate, shift);
+                _logger.LogError(ex, "AC OEE Performance: gagal membaca data PLC {Machine} {Date:yyyy-MM-dd} shift {Shift}", SelectedMachine.Name, productionDate, shift);
                 return result;
             }
 

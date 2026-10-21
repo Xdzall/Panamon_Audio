@@ -15,16 +15,26 @@ namespace MonitoringSystem.Pages
         //public string connectionString = "Server=localhost\\SQLEXPRESS01;Database=PROMOSYS;Trusted_Connection=True;TrustServerCertificate=True;";
         private readonly string connectionString = "Data Source=DESKTOP-NBPATD6\\MSSQLSERVERR;trusted_connection=true;trustservercertificate=True;Database=LatestPROMOSYS;Integrated Security=True;Encrypt=False";
         private readonly ILogger<IndexModel> _logger;
+        private readonly IConfiguration _configuration;
         private bool IsValidInput(int month, int year) => month >= 1 && month <= 12 && year > 0;
 
-        public IndexModel(ILogger<IndexModel> logger)
+        // SEMENTARA (masa testing): halaman pilihan RAC / CAC / MACHINE belum ditampilkan; "/" dan setelah login
+        // langsung ke Production Achievement RAC. Untuk menampilkan pilihan lagi: ubah default di bawah jadi true,
+        // atau tambahkan "Landing": { "ShowModuleChooser": true } di appsettings.json (tanpa build ulang).
+        private const bool ShowModuleChooserDefault = false;
+        private const string TemporaryLandingPage = "/ProductionReport/index";
+
+        public IndexModel(ILogger<IndexModel> logger, IConfiguration configuration)
         {
             _logger = logger;
+            _configuration = configuration;
         }
 
-        // Halaman pilihan RAC / MACHINE (juga tujuan default setelah login)
+        // Halaman pilihan RAC / CAC / MACHINE (juga tujuan default setelah login)
         public IActionResult OnGet()
         {
+            if (!_configuration.GetValue("Landing:ShowModuleChooser", ShowModuleChooserDefault))
+                return Redirect(TemporaryLandingPage);
             return Page();
         }
 

@@ -972,10 +972,11 @@ GROUP BY DAY(pp.CurrentDate)";
             {
                 using var conn = new SqlConnection(this.connectionString);
                 conn.Open();
-                using var cmd = new SqlCommand(@"
-                    SELECT DAY(ProductionDate) AS Day, SUM(DurationMin) AS TotalMinutes
+                var dur = AcOeeLossDuration.Expr(conn); // tanpa jam istirahat
+                using var cmd = new SqlCommand($@"
+                    SELECT DAY(ProductionDate) AS Day, SUM({dur}) AS TotalMinutes
                     FROM dbo.PlcKyoshinLossEvent
-                    WHERE MachineCode = @EditorMachine AND DurationMin > 0
+                    WHERE MachineCode = @EditorMachine AND {dur} > 0
                       AND ProductionDate >= DATEFROMPARTS(@Year, @Month, 1)
                       AND ProductionDate < DATEADD(MONTH, 1, DATEFROMPARTS(@Year, @Month, 1))
                     GROUP BY DAY(ProductionDate)", conn);

@@ -8,11 +8,22 @@ namespace MonitoringSystem.Pages.PreviewSap
     public class IndexModel : PageModel
     {
         private readonly string? connectionString;
+        private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _env;
 
-        public IndexModel(IConfiguration configuration)
+        public IndexModel(IConfiguration configuration, IWebHostEnvironment env)
         {
             connectionString = configuration.GetConnectionString("DefaultConnection");
+            _configuration = configuration;
+            _env = env;
         }
+
+        // Keterangan per model ("MESIN|NAMA" -> teks): model yang tidak ada di MasterData & belum punya alias
+        // dihitung import SAP Plan dengan SUT dummy (lihat Services/SapPlanImport, opsi FallbackSut).
+        public Dictionary<string, string> ModelNotes { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public string? NoteFor(string machineCode, string model) =>
+            ModelNotes.TryGetValue(MonitoringSystem.Services.SapPlanImport.SapPlanCalculator.Key(model, machineCode), out var n) ? n : null;
 
         [BindProperty(SupportsGet = true)] public int SelectedMonth { get; set; } = DateTime.Now.Month;
         [BindProperty(SupportsGet = true)] public int SelectedYear { get; set; } = DateTime.Now.Year;
@@ -117,6 +128,8 @@ namespace MonitoringSystem.Pages.PreviewSap
                     using var reader = cmd.ExecuteReader();
                     while (reader.Read()) AvailableShifts.Add(reader["Shift"].ToString() ?? "");
                 }
+
+                LoadModelNotes(conn);
             }
             catch (Exception ex)
             {
@@ -127,6 +140,38 @@ namespace MonitoringSystem.Pages.PreviewSap
             foreach (var s in new[] { "1", "2", "3", "NS" })
                 if (!AvailableShifts.Contains(s)) AvailableShifts.Add(s);
             AvailableShifts = AvailableShifts.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().OrderBy(s => s).ToList();
+        }
+
+        // Model di tabel yang tidak ada di MasterData (nama + mesin persis) dan tidak ada di file alias -> SUT dummy
+        private void LoadModelNotes(SqlConnection conn)
+        {
+            var fallbackSut = _configuration.GetValue("SapPlanImport:FallbackSut", 35);
+            if (fallbackSut <= 0 || Rows.Count == 0) return;
+            try
+            {
+                var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var cmd = new SqlCommand(@"SELECT LTRIM(RTRIM(ProductName)), LTRIM(RTRIM(MachineCode)) FROM MasterData
+                                                  WHERE ProductName IS NOT NULL AND MachineCode IS NOT NULL AND SUT > 0", conn))
+                using (var reader = cmd.ExecuteReader())
+                    while (reader.Read()) known.Add(MonitoringSystem.Services.SapPlanImport.SapPlanCalculator.Key(reader.GetString(0), reader.GetString(1)));
+
+                var aliasFile = _configuration["SapPlanImport:AliasFile"] ?? "sapplan-aliases.json";
+                var aliasPath = Path.Combine(_env.ContentRootPath, aliasFile);
+                if (System.IO.File.Exists(aliasPath))
+                    foreach (var a in MonitoringSystem.Services.SapPlanImport.SapPlanImportRunner.LoadAliases(aliasPath))
+                        known.Add(MonitoringSystem.Services.SapPlanImport.SapPlanCalculator.Key(a.ExcelName, a.MachineCode));
+
+                foreach (var r in Rows)
+                {
+                    var key = MonitoringSystem.Services.SapPlanImport.SapPlanCalculator.Key(r.Model, r.MachineCode);
+                    if (!known.Contains(key))
+                        ModelNotes[key] = MonitoringSystem.Services.SapPlanImport.SapPlanCalculator.DummyNote(fallbackSut);
+                }
+            }
+            catch
+            {
+                // Keterangan hanya pelengkap: kalau gagal dibaca, tabel tetap tampil tanpa keterangan
+            }
         }
     }
 }

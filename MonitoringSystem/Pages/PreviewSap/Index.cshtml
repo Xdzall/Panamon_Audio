@@ -90,6 +90,8 @@
     .line-MCH1-01 { background: rgba(250, 204, 21, .22); }
     .line-MCH1-02 { background: rgba(167, 139, 250, .25); }
     .badge-shift { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(60,185,252,.2); }
+    /* Keterangan model yang dihitung dengan SUT dummy karena belum ada di MasterData */
+    .sut-dummy-note { display: inline-block; margin-left: 8px; font-size: 11px; padding: 1px 8px; border-radius: 10px; background: rgba(245,158,11,.22); color: #fbbf24; border: 1px solid rgba(245,158,11,.5); }
     .zero { opacity: .35; }
     .sap-empty { padding: 40px; text-align: center; opacity: .7; }
 
@@ -303,7 +305,7 @@
                                     <td class="num row-no">@no</td>
                                     <td class="date-cell">@day.Key.ToString("ddd, dd MMM yyyy", idCulture)</td>
                                     <td><span class="badge-line line-@mc">@L(mc)</span></td>
-                                    <td>@r.Model</td>
+                                    <td>@r.Model@{ var rNote = Model.NoteFor(mc, r.Model); }@if (rNote != null) {<span class="sut-dummy-note" title="SUT model ini belum ada di MasterData">@rNote</span>}</td>
                                     <td><span class="badge-shift">@r.Shift</span></td>
                                     <td class="num @Z(r.QtyNormal)">@r.QtyNormal.ToString("N0")</td>
                                     <td class="num @Z(r.QtyOvertime)">@r.QtyOvertime.ToString("N0")</td>
@@ -366,7 +368,7 @@
                             <tr class="model-row" data-line="@mc" data-model="@m.Model.ToLowerInvariant()" data-normal="@m.Normal" data-ovt="@m.Overtime">
                                 <td class="num row-no">@mNo</td>
                                 <td><span class="badge-line line-@mc">@L(mc)</span></td>
-                                <td>@m.Model</td>
+                                <td>@m.Model@{ var mNote = Model.NoteFor(mc, m.Model); }@if (mNote != null) {<span class="sut-dummy-note" title="SUT model ini belum ada di MasterData">@mNote</span>}</td>
                                 <td class="num">@m.Days</td>
                                 <td class="num @Z(m.Normal)">@m.Normal.ToString("N0")</td>
                                 <td class="num @Z(m.Overtime)">@m.Overtime.ToString("N0")</td>

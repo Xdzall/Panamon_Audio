@@ -33,6 +33,51 @@ namespace MonitoringSystem.Pages.ACOEE.Inventory
 
         public List<InventoryData> listData { get; set; } = new();
 
+        // ─── Panel kanan: Actual vs Plan per model Expander Kyoshin 6.35 untuk satu periode ─────────────
+        // Default satu minggu Senin-Minggu (tidak terikat bulan filter tabel), bisa diatur bebas (maks. 62 hari).
+        // Plan = Change Plan (bar ungu Production Achievement AC OEE), Actual = output model itu; keduanya dijumlah
+        // dari dbo.PlcKyoshinChangePlan (diisi Plclogger tiap menit) per hari produksi 07:00-07:00.
+        public async Task<IActionResult> OnGetPlanActualAsync(DateTime from, DateTime to)
+        {
+            if (to < from) (from, to) = (to, from);
+            if ((to - from).TotalDays > 62) return BadRequest(new { message = "Rentang maksimal 62 hari." });
+
+            var items = new List<PlanActualItem>();
+            try
+            {
+                var conn = _context.Database.GetDbConnection();
+                await conn.OpenAsync();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT LTRIM(RTRIM(Model)) AS Model, SUM(ChangePlan) AS PlanQty, SUM(Actual) AS ActualQty,
+                           MIN(StartAt) AS FirstStart, COUNT(DISTINCT ProductionDate) AS Days
+                    FROM dbo.PlcKyoshinChangePlan
+                    WHERE MachineCode = 'MCH1-01' AND ProductionDate >= @from AND ProductionDate <= @to
+                    GROUP BY LTRIM(RTRIM(Model))
+                    ORDER BY MIN(StartAt)";
+                var pFrom = cmd.CreateParameter(); pFrom.ParameterName = "@from"; pFrom.Value = from.Date; cmd.Parameters.Add(pFrom);
+                var pTo = cmd.CreateParameter(); pTo.ParameterName = "@to"; pTo.Value = to.Date; cmd.Parameters.Add(pTo);
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    items.Add(new PlanActualItem
+                    {
+                        Model = reader.GetString(0),
+                        Plan = Convert.ToInt32(reader.GetValue(1)),
+                        Actual = Convert.ToInt32(reader.GetValue(2)),
+                        Days = Convert.ToInt32(reader.GetValue(4))
+                    });
+                }
+                await conn.CloseAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error loading Kyoshin plan vs actual: {ex.Message}");
+                return StatusCode(500, new { message = "Data Plan vs Actual tidak bisa dimuat." });
+            }
+            return new JsonResult(new { from = from.ToString("yyyy-MM-dd"), to = to.ToString("yyyy-MM-dd"), items });
+        }
+
         // ─── GET ───────────────────────────────────────────────
         public async Task OnGetAsync()
         {
@@ -114,7 +159,6 @@ namespace MonitoringSystem.Pages.ACOEE.Inventory
 
                     invData.DailyValues[dayNum] = actual;
                 }
-
                 await conn.CloseAsync();
 
                 listData = dataMap.Values.ToList();
@@ -130,6 +174,15 @@ namespace MonitoringSystem.Pages.ACOEE.Inventory
                 if (ActiveYear == 0) ActiveYear = DateTime.Now.Year;
             }
         }
+    }
+
+    // Plan vs Actual satu model Expander Kyoshin 6.35 dalam satu periode (dbo.PlcKyoshinChangePlan)
+    public class PlanActualItem
+    {
+        public string Model { get; set; } = "";
+        public int Plan { get; set; }    // jumlah Change Plan (bar ungu)
+        public int Actual { get; set; }
+        public int Days { get; set; }    // jumlah hari model itu jalan dalam periode
     }
 
     // ─── DATA MODEL ─────────────────────────────────────────────
