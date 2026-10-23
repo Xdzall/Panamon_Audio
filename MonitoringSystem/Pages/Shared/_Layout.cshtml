@@ -1,9 +1,11 @@
-@using MonitoringSystem.Data
+﻿@using MonitoringSystem.Data
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 @{
     string layoutMenu = ViewContext.HttpContext.Request.Cookies["layoutType"];
     string baseColor = "linear-gradient(109.6deg, rgb(61, 121, 176) 11.3%, rgb(35, 66, 164) 91.1%);";
     var title = ViewData["Title"] as string;
+    string dashboardAudioUrl = Configuration["DashboardAudio:Url"] ?? "http://localhost:5108";
 }
 
 <!DOCTYPE html>
@@ -45,7 +47,7 @@
 
 </head>
 
-<body class="reusable-bg @(title == "Machine" ? "machine-production-layout" : null)">
+<body class="reusable-bg ">
     <script>
         (function () {
             var m = document.cookie.match(/(?:^|; )(?:themeMode|layoutType)=([^;]*)/);
@@ -79,7 +81,7 @@
         <div id="bdSidebar" class="d-flex flex-column flex-shrink-0 text-white offcanvas-md offcanvas-start">
             <ul class="mynav nav nav-pills flex-column">
                 <li class="nav-item">
-                    <a href="http://10.83.33.103:5009/">
+                    <a href="@dashboardAudioUrl" title="Audio Executive Dashboard">
                         <i class="fa-solid fa-house"></i>
                         <span class="nav-label">Home</span>
                     </a>
@@ -121,24 +123,22 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/Inventory/index">
+                    <a href="/Inventory/Index">
                         <i class="fa-solid fa-boxes-stacked"></i>
                         <span class="nav-label">Inventory</span>
                     </a>
                 </li>
-              @*   <li class="nav-item">
-    <a href="/Inventory/index">
-        <i class="fa-solid fa-boxes-stacked"></i>
-        <span class="nav-label">Inventory</span>
-    </a>
-</li> *@
-                <!-- MORE MENU -->
+                              <!-- MORE MENU -->
                 <li class="nav-item" style="position: relative;">
                     <a href="#" id="moreMenuBtn">
                         <i class="fa-solid fa-ellipsis-vertical"></i>
                         <span class="nav-label">More</span>
                     </a>
                     <div id="moreMenuPopup" class="sidebar-menu-popup">
+                        <a href="/Summary/index">
+                            <i class="fa-solid fa-table-cells-large"></i>
+                            <span>Executive<br>Summary</span>
+                        </a>
                         <a href="/Summary/ProductionPlan">
                             <i class="fa-solid fa-clipboard-list"></i>
                             <span>Production<br>Plan</span>
@@ -171,8 +171,16 @@
                         *@
                     </div>
                 </li>
-                <!-- MOVE MENU (pindah RAC / CAC / MACHINE) -->
-                @await Html.PartialAsync("/Pages/Shared/_MoveMenu.cshtml")
+                <!-- MANAGE USER (ADMIN ONLY) -->
+                @if (User.IsInRole("Administrator") || User.IsInRole("Admin"))
+                {
+                    <li class="nav-item">
+                        <a href="/Identity/Account/Register" title="Manage User (Admin)">
+                            <i class="fa-solid fa-users-gear" style="color: #38bdf8;"></i>
+                            <span class="nav-label">Manage<br>User</span>
+                        </a>
+                    </li>
+                }
             </ul>
             <div class="align-items-center center">
                 <button id="themeToggle" title="Toggle Theme" style="
@@ -205,33 +213,13 @@
 
         <!-- Main Content -->
         <div class="main-content-wrapper">
-            @* @if (title == "Machine")
-            {
-                <div class="p-0">
-                    <main role="main">
-                        @RenderBody()
-                    </main>
-                </div>
-            }
-            else
-            {
-                <div class="p-4">
-                    <main role="main" class="pb-2">
-                        @RenderBody()
-                    </main>
-                    <div class="footer-copyright text-white text-center">
-                        <p class="m-0 opacity-75">&copy; 2026 - Panasonic Manufacturing Indonesia (PMI) - AC BU</p>
-                    </div>
-                </div>
-            } *@
-
             <div class="p-4">
                 <main role="main" class="pb-2">
                     @RenderBody()
                 </main>
 
                 <div class="footer-copyright text-white text-center">
-                    <p class="m-0 opacity-75">&copy; 2026 - Panasonic Manufacturing Indonesia (PMI) - AC BU</p>
+                    <p class="m-0 opacity-75">&copy; 2026 - Panasonic Manufacturing Indonesia (PMI) - Audio Business Unit</p>
                 </div>
             </div>
         </div>

@@ -7,14 +7,16 @@ namespace MonitoringSystem.Pages.Quality
 {
     public class QualityModel : PageModel
     {
-        public string connectionString = "Server=10.83.33.103;User Id=sa;Password=sa;Database=PROMOSYS;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
+        // Production Server AC (hanya di jaringan internal perusahaan):
+        // public string connectionString = "Server=localhost;User Id=sa;Password=sa;Database=AUDIO_PRODUCTION;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
+        public string connectionString = "Server=localhost\\SQLEXPRESS;Database=AUDIO_PRODUCTION;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
 
         public int TotalPlan { get; set; }
         public int DefectQuantity { get; set; }
         public double DefectRatio { get; set; }
         public string errorMessage = "";
 
-        public QualityDefectCatalog.LineDefinition Line { get; private set; } = QualityDefectCatalog.CU;
+        public QualityDefectCatalog.LineDefinition Line { get; private set; } = QualityDefectCatalog.Final1;
 
         // Pie: jumlah defect per station group (selalu semua station pada rentang tanggal).
         public List<StationQuantity> StationBreakdown { get; set; }
@@ -41,8 +43,16 @@ namespace MonitoringSystem.Pages.Quality
 
         public int ChartYear { get; private set; }
 
-        public QualityModel()
+        private readonly IConfiguration? _configuration;
+
+        public QualityModel(IConfiguration? configuration = null)
         {
+            _configuration = configuration;
+            if (_configuration != null)
+            {
+                var conn = _configuration.GetConnectionString("DefaultConnection");
+                if (!string.IsNullOrEmpty(conn)) connectionString = conn;
+            }
             StationBreakdown = new List<StationQuantity>();
             CausesByStation = new Dictionary<string, Dictionary<string, CategoryCauses>>();
             YearlyDefects = new List<YearlyDefectData>();
@@ -62,7 +72,7 @@ namespace MonitoringSystem.Pages.Quality
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
                         await connection.OpenAsync();
-                        string insertQuery = "INSERT INTO TargetRatioDefect.dbo.TargetRatio (Ratio) VALUES (@NewRatio)";
+                        string insertQuery = "INSERT INTO dbo.TargetRatio (Ratio) VALUES (@NewRatio)";
                         using (SqlCommand command = new SqlCommand(insertQuery, connection))
                         {
                             command.Parameters.AddWithValue("@NewRatio", NewTargetRatio);
@@ -131,7 +141,7 @@ namespace MonitoringSystem.Pages.Quality
                 {
                     connection.Open();
 
-                    string getTargetRatio = "SELECT TOP 1 Ratio FROM TargetRatioDefect.dbo.TargetRatio ORDER BY ID DESC";
+                    string getTargetRatio = "SELECT TOP 1 Ratio FROM dbo.TargetRatio ORDER BY ID DESC";
                     using (SqlCommand command = new SqlCommand(getTargetRatio, connection))
                     {
                         var result = command.ExecuteScalar();
@@ -141,14 +151,11 @@ namespace MonitoringSystem.Pages.Quality
                         }
                     }
 
-                    string getTotalProduction = @"
-                    SELECT
-                         COUNT(TotalUnit)
-                    FROM
-                        OEESN
-                    WHERE
-                        MachineCode = @MachineCode
-                       AND CAST(Date AS DATE) BETWEEN @StartDate AND @EndDate;";
+                    string tbl = MachineCode.StartsWith("FINAL", StringComparison.OrdinalIgnoreCase) ? MachineCode : "FINAL1";
+                    string getTotalProduction = $@"
+                    SELECT ISNULL(MAX(Actual) - MIN(Actual), 0)
+                    FROM dbo.[{tbl}]
+                    WHERE DateTime >= @StartDate AND DateTime < DATEADD(day, 1, @EndDate);";
 
                     using (SqlCommand command = new SqlCommand(getTotalProduction, connection))
                     {

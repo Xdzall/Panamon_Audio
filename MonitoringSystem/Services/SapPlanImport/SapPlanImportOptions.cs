@@ -8,15 +8,13 @@ namespace MonitoringSystem.Services.SapPlanImport
         /// <summary>Worker aktif atau tidak.</summary>
         public bool Enabled { get; set; } = false;
 
-        /// <summary>Jadwal otomatis hanya jalan di PC dengan nama ini (server), supaya Panamon di laptop/PC lain
-        /// tidak ikut import ke database yang sama. Kosongkan ("") untuk mengizinkan semua PC.</summary>
-        public string OnlyOnMachine { get; set; } = "29485ACP101-103";
+        /// <summary>Jadwal otomatis hanya jalan di PC dengan nama ini (server). Kosongkan ("") untuk mengizinkan semua PC.</summary>
+        public string OnlyOnMachine { get; set; } = "";
 
         /// <summary>True = hanya hitung & tulis ringkasan ke file, TIDAK menulis database.</summary>
         public bool DryRun { get; set; } = true;
 
-        /// <summary>UNC path file Excel, mis. \\137.40.93.11\ac\Management\Mp_18\PSI\PSI-26-27\Daily prod plan 2026.xlsx.
-        /// Jangan pakai drive mapped (Z:\) karena tidak terlihat oleh akun Windows Service / IIS.</summary>
+        /// <summary>Path file Excel perencanaan produksi harian.</summary>
         public string SourcePath { get; set; } = string.Empty;
 
         /// <summary>Interval jadwal dalam jam (dihitung dari jam 00:00 zona waktu TimeZone).</summary>
@@ -36,13 +34,12 @@ namespace MonitoringSystem.Services.SapPlanImport
         /// <summary>Kapasitas Normal NS per hari per mesin (473 menit).</summary>
         public int CapacitySeconds { get; set; } = 28380;
 
-        /// <summary>SUT (detik) pengganti untuk model yang tidak ada di MasterData dan belum punya alias, supaya import
-        /// bulan itu tidak gagal. Model ini diberi keterangan (audit, CSV, halaman Preview SAP). 0 = tetap gagal seperti dulu.</summary>
+        /// <summary>SUT (detik) pengganti untuk model yang tidak ada di MasterData.</summary>
         public int FallbackSut { get; set; } = 35;
 
         public string Shift { get; set; } = "NS";
-        public string CuMachineCode { get; set; } = "MCH1-01";
-        public string CsMachineCode { get; set; } = "MCH1-02";
+        public string CuMachineCode { get; set; } = "FINAL1";
+        public string CsMachineCode { get; set; } = "FINAL2";
 
         /// <summary>Jeda antara dua pengecekan ukuran & waktu modifikasi file (harus sama = file stabil).</summary>
         public int StableCheckSeconds { get; set; } = 30;
@@ -65,7 +62,7 @@ namespace MonitoringSystem.Services.SapPlanImport
         /// <summary>null = ikut DryRun utama. true = hanya CSV, database tidak diubah.</summary>
         public bool? DryRun { get; set; }
 
-        /// <summary>File urutan prioritas kategori No. 1 - No. 19 (relatif ke content root).</summary>
+        /// <summary>File urutan prioritas kategori (relatif ke content root).</summary>
         public string PriorityFile { get; set; } = "psi-weekly-priority.json";
     }
 }

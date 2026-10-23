@@ -22,6 +22,7 @@ namespace MonitoringSystem.Pages.ProductionReport
         [BindProperty] public string? TargetMachine { get; set; }
 
         public bool IsCurrentMonthView { get; private set; }
+        public bool IsStandbyLine => MachineLine == "FINAL6" || MachineLine == "FINAL11";
         public int DaysInMonth { get; private set; }
         public List<string> ChartLabels { get; private set; } = new List<string>();
         public List<decimal> NormalData { get; private set; } = new List<decimal>();
@@ -160,7 +161,7 @@ namespace MonitoringSystem.Pages.ProductionReport
 
         public IActionResult OnGetDownloadTemplate(string type)
         {
-            if (string.IsNullOrEmpty(type) || (type.ToLower() != "cu" && type.ToLower() != "cs"))
+            if (string.IsNullOrEmpty(type) || string.IsNullOrWhiteSpace(type))
                 return NotFound("Invalid template type.");
 
             string wwwrootPath = _webHostEnvironment.WebRootPath;
@@ -273,7 +274,7 @@ namespace MonitoringSystem.Pages.ProductionReport
       AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
       {(MachineLine != "All"
                     ? "AND pr.MachineCode = @MachineLine"
-                    : "AND pr.MachineCode IN ('MCH1-01', 'MCH1-02')")}
+                    : "AND pr.MachineCode LIKE 'FINAL%'")}
       {planShiftFilter}
     GROUP BY DAY(pp.CurrentDate)";
 
@@ -284,7 +285,7 @@ namespace MonitoringSystem.Pages.ProductionReport
     INNER JOIN ProductionRecords pr ON pp.Id = pr.PlanId
     WHERE pp.CurrentDate >= DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)
       AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
-      AND pr.MachineCode IN ('MCH1-01', 'MCH1-02')
+      AND pr.MachineCode LIKE 'FINAL%'
       {planShiftFilter}";
 
             // Workforce shown in Production Achievement must follow the latest
@@ -306,160 +307,75 @@ namespace MonitoringSystem.Pages.ProductionReport
           AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
           {(MachineLine != "All"
                         ? "AND pr.MachineCode = @MachineLine"
-                        : "AND pr.MachineCode IN ('MCH1-01', 'MCH1-02')")}
+                        : "AND pr.MachineCode LIKE 'FINAL%'")}
           {planShiftFilter}
         GROUP BY DAY(pp.CurrentDate), pr.MachineCode
     ) workerByMachine
     GROUP BY Day";
 
-            string actualSql = $@"
-WITH ShiftData AS (
-    SELECT
-        CASE
-            WHEN CAST(SDate AS TIME) < '07:00:00' THEN CAST(DATEADD(DAY, -1, SDate) AS DATE)
-            ELSE CAST(SDate AS DATE)
-        END AS ReportDate,
-        SDate,
-        Product_Id,
-        TotalUnit,
-        NoOfOperator,
-        ShiftMode AS Mode_Asli_Mesin,
-        CASE 
-            WHEN ShiftMode = 'NON-SHIFT' THEN
-                CASE
-                    WHEN CAST(SDate AS TIME) > '16:00:00' THEN 'OVERTIME'
-                    ELSE 'NON-SHIFT'
-                END
-            WHEN ShiftMode LIKE 'OVERTIME%' THEN
-                CASE 
-                    WHEN MONTH(CAST(DATEADD(hour, -7, SDate) AS DATE)) = 7 AND YEAR(CAST(DATEADD(hour, -7, SDate) AS DATE)) = 2026 AND DAY(CAST(DATEADD(hour, -7, SDate) AS DATE)) <= 5 THEN 'OVERTIME'
-                    WHEN CAST(SDate AS TIME) >= '15:45:00' AND CAST(SDate AS TIME) <= '19:45:59' THEN 'OVERTIME SHIFT 1'
-                    WHEN CAST(SDate AS TIME) >= '19:46:00' AND CAST(SDate AS TIME) <= '23:14:59' THEN 'OVERTIME SHIFT 3'
-                    WHEN CAST(SDate AS TIME) >= '23:15:00' OR CAST(SDate AS TIME) < '07:00:00' THEN 'SHIFT 3'
-                    ELSE 'OVERTIME'
-                END
-            WHEN ShiftMode = 'SHIFT 2' AND MONTH(CAST(DATEADD(hour, -7, SDate) AS DATE)) IN (7, 8) AND YEAR(CAST(DATEADD(hour, -7, SDate) AS DATE)) = 2026 THEN
-                CASE 
-                    WHEN CAST(SDate AS TIME) >= '07:00:00' AND CAST(SDate AS TIME) <= '15:44:59' THEN 'SHIFT 1'
-                    WHEN CAST(SDate AS TIME) >= '15:45:00' AND CAST(SDate AS TIME) <= '19:45:59' THEN 'OVERTIME SHIFT 1'
-                    WHEN CAST(SDate AS TIME) >= '19:46:00' AND CAST(SDate AS TIME) <= '23:14:59' THEN 'OVERTIME SHIFT 3'
-                    ELSE 'SHIFT 3'
-                END
-            WHEN ShiftMode = 'SHIFT 3' AND CAST(SDate AS TIME) >= '19:46:00' AND CAST(SDate AS TIME) <= '23:14:59' THEN 'OVERTIME SHIFT 3'
-            ELSE ShiftMode
-        END AS Status_Di_Web,
-        MachineCode
-    FROM oeesn
-    WHERE SDate >= DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)
-      AND SDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
-      AND (
-          CAST(SDate AS TIME) >= '07:00:00'
-          OR (SDate >= DATEADD(DAY, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)) AND CAST(SDate AS TIME) < '07:00:00')
-      )
-    {dateFilter}
-    {(MachineLine != "All" ? "AND MachineCode = @MachineLine" : "AND MachineCode IN ('MCH1-01', 'MCH1-02')")}
-),
-GroupedData AS (
-    SELECT 
-        ReportDate,
-        MachineCode,
-        Mode_Asli_Mesin,
-        Status_Di_Web,
-        Product_Id,
-        CASE 
-            WHEN YEAR(ReportDate) = 2026 AND MONTH(ReportDate) >= 3 AND MONTH(ReportDate) <= 7 THEN MAX(TotalUnit)
-            ELSE COUNT(Product_Id)
-        END AS Estimasi_Produksi,
-        MAX(SDate) AS Max_SDate,
-        MAX(NoOfOperator) AS MaxOp
-    FROM ShiftData
-    GROUP BY 
-        ReportDate, 
-        MachineCode, 
-        Mode_Asli_Mesin, 
-        Status_Di_Web, 
-        Product_Id,
-        CASE
-            WHEN CAST(SDate AS TIME) >= '07:00:00' AND CAST(SDate AS TIME) <= '15:44:59' THEN 1
-            WHEN CAST(SDate AS TIME) >= '15:45:00' AND CAST(SDate AS TIME) <= '19:45:59' THEN 2
-            WHEN CAST(SDate AS TIME) >= '19:46:00' AND CAST(SDate AS TIME) <= '23:14:59' THEN 3
-            ELSE 4
-        END
-),
-MachineDaily AS (
-    SELECT 
-        ReportDate,
-        MachineCode,
-        
-        SUM(CASE WHEN Status_Di_Web = 'SHIFT 1' THEN Estimasi_Produksi ELSE 0 END) as S1_Unit,
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 1' THEN CAST(Max_SDate AS TIME) END) as S1_Time,
+            // =========================================================================
+            // SUMBER DATA UTAMA: KHUSUS PANAMON AUDIO (dbo.FINAL1 s/d dbo.FINAL11)
+            // Menggantikan seluruh dependensi tabel AC (oeesn/ShiftData)
+            // =========================================================================
+            var audioLines = new List<string> { "FINAL1", "FINAL2", "FINAL3", "FINAL4", "FINAL5", "FINAL7", "FINAL8", "FINAL9", "FINAL10" };
+            if (MachineLine != "All")
+            {
+                audioLines = audioLines.Where(l => l.Equals(MachineLine, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
 
-        SUM(CASE WHEN Status_Di_Web = 'SHIFT 2' THEN Estimasi_Produksi ELSE 0 END) as S2_Unit,
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 2' THEN CAST(Max_SDate AS TIME) END) as S2_Time,
+            var lineQueries = new List<string>();
+            foreach (var l in audioLines)
+            {
+                lineQueries.Add($@"
+                    SELECT 
+                        '{l}' AS MachineCode,
+                        CASE 
+                            WHEN CAST(DateTime AS TIME) < '07:00:00' 
+                            THEN DAY(DATEADD(day, -1, CAST(DateTime AS DATE)))
+                            ELSE DAY(CAST(DateTime AS DATE))
+                        END AS Day,
+                        ISNULL(MAX(Actual) - MIN(Actual), 0) AS DeltaActual,
+                        ISNULL(MAX(Target) - MIN(Target), 0) AS DeltaTarget,
+                        MAX(CAST(DateTime AS TIME)) AS MaxTime
+                    FROM dbo.[{l}]
+                    WHERE DateTime >= DATEADD(hour, 7, CAST(DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1) AS DATETIME2))
+                      AND DateTime < DATEADD(hour, 7, CAST(DATEADD(month, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)) AS DATETIME2))
+                    GROUP BY 
+                        CASE 
+                            WHEN CAST(DateTime AS TIME) < '07:00:00' 
+                            THEN DAY(DATEADD(day, -1, CAST(DateTime AS DATE)))
+                            ELSE DAY(CAST(DateTime AS DATE))
+                        END");
+            }
 
-        SUM(CASE WHEN Status_Di_Web = 'SHIFT 3' THEN Estimasi_Produksi ELSE 0 END) as S3_Unit,
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 3' THEN CAST(Max_SDate AS TIME) END) as S3_Time,
-
-        SUM(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN Estimasi_Produksi ELSE 0 END) as NS_Unit,
-        MAX(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN CAST(Max_SDate AS TIME) END) as NS_Time,
-        MAX(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN Estimasi_Produksi END) as NS_MaxUnit,
-
-        SUM(CASE WHEN Status_Di_Web LIKE 'OVERTIME%' THEN Estimasi_Produksi ELSE 0 END) as OT_Unit,
-        MAX(CASE WHEN Status_Di_Web LIKE 'OVERTIME%' AND Estimasi_Produksi > 0 THEN CAST(Max_SDate AS TIME) END) as OT_Time,
-        MAX(CASE WHEN Status_Di_Web = 'OVERTIME SHIFT 1' AND Estimasi_Produksi > 0 THEN CAST(Max_SDate AS TIME) END) as OT_S1_Time,
-        MAX(CASE WHEN Status_Di_Web = 'OVERTIME SHIFT 3' AND Estimasi_Produksi > 0 THEN CAST(Max_SDate AS TIME) END) as OT_S3_Time,
-        MAX(CASE WHEN Status_Di_Web = 'OVERTIME' AND Estimasi_Produksi > 0 THEN CAST(Max_SDate AS TIME) END) as OT_Normal_Time,
-
-        CASE WHEN SUM(CASE WHEN Status_Di_Web = 'SHIFT 1' THEN Estimasi_Produksi ELSE 0 END) > 0 OR MAX(CASE WHEN Status_Di_Web = 'SHIFT 1' THEN CAST(Max_SDate AS TIME) END) IS NOT NULL THEN 1 ELSE 0 END as S1_ActiveCount,
-        CASE WHEN SUM(CASE WHEN Status_Di_Web = 'SHIFT 2' THEN Estimasi_Produksi ELSE 0 END) > 0 OR MAX(CASE WHEN Status_Di_Web = 'SHIFT 2' THEN CAST(Max_SDate AS TIME) END) IS NOT NULL THEN 1 ELSE 0 END as S2_ActiveCount,
-        CASE WHEN SUM(CASE WHEN Status_Di_Web = 'SHIFT 3' THEN Estimasi_Produksi ELSE 0 END) > 0 OR MAX(CASE WHEN Status_Di_Web = 'SHIFT 3' THEN CAST(Max_SDate AS TIME) END) IS NOT NULL THEN 1 ELSE 0 END as S3_ActiveCount,
-        CASE WHEN SUM(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN Estimasi_Produksi ELSE 0 END) > 0 OR MAX(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN CAST(Max_SDate AS TIME) END) IS NOT NULL THEN 1 ELSE 0 END as NS_ActiveCount,
-        CASE WHEN SUM(CASE WHEN Status_Di_Web LIKE 'OVERTIME%' THEN Estimasi_Produksi ELSE 0 END) > 0 OR MAX(CASE WHEN Status_Di_Web LIKE 'OVERTIME%' THEN CAST(Max_SDate AS TIME) END) IS NOT NULL THEN 1 ELSE 0 END as OT_ActiveCount,
-
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 1' THEN MaxOp END) as S1_MaxOp,
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 2' THEN MaxOp END) as S2_MaxOp,
-        MAX(CASE WHEN Status_Di_Web = 'SHIFT 3' THEN MaxOp END) as S3_MaxOp,
-        MAX(CASE WHEN Status_Di_Web = 'NON-SHIFT' THEN MaxOp END) as NS_MaxOp,
-        MAX(CASE WHEN Status_Di_Web LIKE 'OVERTIME%' THEN MaxOp END) as OT_MaxOp,
-
-        MAX(MaxOp) as MaxOp,
-        SUM(Estimasi_Produksi) as TotalUnit
-    FROM GroupedData
-    WHERE 1=1 {shiftSelectionSql.Replace("ShiftMode", "Status_Di_Web")}
-    GROUP BY ReportDate, MachineCode
-),
-DailyAggregates AS (
-    SELECT 
-        ReportDate,
-        SUM(ISNULL(S1_Unit, 0)) as S1_Unit,
-        MAX(S1_Time) as S1_Time,
-        SUM(ISNULL(S2_Unit, 0)) as S2_Unit,
-        MAX(S2_Time) as S2_Time,
-        SUM(ISNULL(S3_Unit, 0)) as S3_Unit,
-        MAX(S3_Time) as S3_Time,
-        SUM(ISNULL(NS_Unit, 0)) as NS_Unit,
-        MAX(NS_Time) as NS_Time,
-        SUM(ISNULL(OT_Unit, 0)) as OT_Unit,
-        MAX(OT_Time) as OT_Time,
-        MAX(OT_S1_Time) as OT_S1_Time,
-        MAX(OT_S3_Time) as OT_S3_Time,
-        MAX(OT_Normal_Time) as OT_Normal_Time,
-        SUM(ISNULL(S1_MaxOp, 0)) as S1_MaxOp,
-        SUM(ISNULL(S2_MaxOp, 0)) as S2_MaxOp,
-        SUM(ISNULL(S3_MaxOp, 0)) as S3_MaxOp,
-        SUM(ISNULL(NS_MaxOp, 0)) as NS_MaxOp,
-        SUM(ISNULL(OT_MaxOp, 0)) as OT_MaxOp,
-        SUM(ISNULL(S1_ActiveCount, 0)) as S1_ActiveCount,
-        SUM(ISNULL(S2_ActiveCount, 0)) as S2_ActiveCount,
-        SUM(ISNULL(S3_ActiveCount, 0)) as S3_ActiveCount,
-        SUM(ISNULL(NS_ActiveCount, 0)) as NS_ActiveCount,
-        SUM(ISNULL(OT_ActiveCount, 0)) as OT_ActiveCount,
-        SUM(MaxOp) as MaxOp,
-        MAX(TotalUnit) as TotalUnit
-    FROM MachineDaily
-    GROUP BY ReportDate
-)
-SELECT DAY(ReportDate) as Day, * FROM DailyAggregates ORDER BY ReportDate ASC;";
+            string actualSql = lineQueries.Count > 0 
+                ? $@"
+                WITH LineAggregates AS (
+                    {string.Join(" UNION ALL ", lineQueries)}
+                )
+                SELECT 
+                    Day,
+                    SUM(DeltaActual) AS S1_Unit,
+                    0 AS S2_Unit,
+                    0 AS S3_Unit,
+                    0 AS NS_Unit,
+                    0 AS OT_Unit,
+                    MAX(MaxTime) AS S1_Time,
+                    CAST('00:00:00' AS TIME) AS S2_Time,
+                    CAST('00:00:00' AS TIME) AS S3_Time,
+                    CAST('00:00:00' AS TIME) AS NS_Time,
+                    CAST('00:00:00' AS TIME) AS OT_Time,
+                    CAST(NULL AS TIME) AS OT_S1_Time,
+                    CAST(NULL AS TIME) AS OT_S3_Time,
+                    CAST(NULL AS TIME) AS OT_Normal_Time,
+                    0 AS S1_MaxOp, 0 AS S2_MaxOp, 0 AS S3_MaxOp, 0 AS NS_MaxOp, 0 AS OT_MaxOp,
+                    1 AS S1_ActiveCount, 0 AS S2_ActiveCount, 0 AS S3_ActiveCount, 0 AS NS_ActiveCount, 0 AS OT_ActiveCount,
+                    0 AS MaxOp,
+                    SUM(DeltaActual) AS TotalUnit
+                FROM LineAggregates
+                GROUP BY Day
+                ORDER BY Day ASC;"
+                : "SELECT 1 AS Day, 0 AS S1_Unit, 0 AS S2_Unit, 0 AS S3_Unit, 0 AS NS_Unit, 0 AS OT_Unit, CAST('00:00:00' AS TIME) AS S1_Time, CAST('00:00:00' AS TIME) AS S2_Time, CAST('00:00:00' AS TIME) AS S3_Time, CAST('00:00:00' AS TIME) AS NS_Time, CAST('00:00:00' AS TIME) AS OT_Time, CAST(NULL AS TIME) AS OT_S1_Time, CAST(NULL AS TIME) AS OT_S3_Time, CAST(NULL AS TIME) AS OT_Normal_Time, 0 AS S1_MaxOp, 0 AS S2_MaxOp, 0 AS S3_MaxOp, 0 AS NS_MaxOp, 0 AS OT_MaxOp, 0 AS S1_ActiveCount, 0 AS S2_ActiveCount, 0 AS S3_ActiveCount, 0 AS NS_ActiveCount, 0 AS OT_ActiveCount, 0 AS MaxOp, 0 AS TotalUnit WHERE 1=0;";
             string sapShiftFilter = "";
             if (!SelectedShifts.Contains("All") && SelectedShifts.Any())
             {
@@ -476,7 +392,7 @@ SELECT DAY(ReportDate) as Day, * FROM DailyAggregates ORDER BY ReportDate ASC;";
                               AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
                               {(MachineLine != "All"
                            ? "AND sp.MachineCode = @MachineLine"
-                           : "AND sp.MachineCode IN ('MCH1-01', 'MCH1-02')")}
+                           : "AND sp.MachineCode LIKE 'FINAL%'")}
                               {sapShiftFilter}
                             GROUP BY DAY(pp.CurrentDate)";
 
@@ -526,7 +442,7 @@ LEFT JOIN (
 ) pr ON machines.PlanId = pr.PlanId AND machines.MachineCode = pr.MachineCode
 WHERE pp.CurrentDate >= DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)
   AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
-  {(MachineLine != "All" ? "AND machines.MachineCode = @MachineLine" : "AND machines.MachineCode IN ('MCH1-01', 'MCH1-02')")}
+  {(MachineLine != "All" ? "AND machines.MachineCode = @MachineLine" : "AND machines.MachineCode LIKE 'FINAL%'")}
 GROUP BY DAY(pp.CurrentDate)";
                     }
 
@@ -899,7 +815,7 @@ GROUP BY DAY(pp.CurrentDate)";
                 string checkSql = $@"
             SELECT TOP (1) 1 FROM LossTimeActuals
             WHERE Month = @Month AND Year = @Year
-            {(MachineLine != "All" ? "AND MachineLine = @MachineLine" : "AND MachineLine IN ('MCH1-01', 'MCH1-02')")}";
+            {(MachineLine != "All" ? "AND MachineLine = @MachineLine" : "AND MachineLine LIKE 'FINAL%'")}";
 
                 using (var conn = new SqlConnection(this.connectionString))
                 {
@@ -930,7 +846,7 @@ GROUP BY DAY(pp.CurrentDate)";
                 SELECT Day, SUM(Minutes) as TotalMinutes
                 FROM LossTimeActuals
                 WHERE Month = @Month AND Year = @Year AND Minutes > 0
-                {(MachineLine != "All" ? "AND MachineLine = @MachineLine" : "AND MachineLine IN ('MCH1-01', 'MCH1-02')")}
+                {(MachineLine != "All" ? "AND MachineLine = @MachineLine" : "AND MachineLine LIKE 'FINAL%'")}
                 {shiftFilter}
                 GROUP BY Day";
 
@@ -996,7 +912,7 @@ GROUP BY DAY(pp.CurrentDate)";
             }
 
             string lossTimeMachineFilter = (MachineLine == "All")
-                ? "AND MachineCode IN ('MCH1-01', 'MCH1-02')"
+                ? "AND MachineCode LIKE 'FINAL%'"
                 : "AND MachineCode = @Machine";
 
             string query = $@"

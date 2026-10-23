@@ -1,4 +1,4 @@
-@page
+﻿@page
 @model MonitoringSystem.Pages.Summary.PWKModel
 @{
     ViewData["Title"] = "PWK";
@@ -777,8 +777,17 @@
                             <label class="mb-0">Machine Line</label>
                             <select class="form-select" style="width: 120px;" name="FilterMachineLine" asp-for="FilterMachineLine">
                                 <option value="">All</option>
-                                <option value="MCH1-01">CU</option>
-                                <option value="MCH1-02">CS</option>
+                                            <option value="FINAL1">FINAL 1</option>
+                                            <option value="FINAL2">FINAL 2</option>
+                                            <option value="FINAL3">FINAL 3</option>
+                                            <option value="FINAL4">FINAL 4</option>
+                                            <option value="FINAL5">FINAL 5</option>
+                                            <option value="FINAL6">FINAL 6</option>
+                                            <option value="FINAL7">FINAL 7</option>
+                                            <option value="FINAL8">FINAL 8</option>
+                                            <option value="FINAL9">FINAL 9</option>
+                                            <option value="FINAL10">FINAL 10</option>
+                                            <option value="FINAL11">FINAL 11</option>
                                 <!option value="">CB</!option>
                                 <!option value="">EVA</!option>
                                 <!option value="">COND</!option>
@@ -795,6 +804,10 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    
+        <span class="badge bg-dark">BU Audio</span>
     </div>
 
     <div class="pwk-card">

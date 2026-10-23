@@ -75,12 +75,12 @@ namespace MonitoringSystem.Pages.BusinessUnitReport
             this.IsCurrentMonthView = (SelectedYear == DateTime.Now.Year && SelectedMonth == DateTime.Now.Month);
             this.DaysInMonth = DateTime.DaysInMonth(SelectedYear, SelectedMonth);
 
-            // AC Data (MCH1-01, MCH1-02) from DefaultConnection
+            // Audio Data from DefaultConnection
             string defaultConn = _configuration.GetConnectionString("DefaultConnection");
             var acData = FetchBuData("AC", defaultConn, 
-                "AND pr.MachineCode IN ('MCH1-01', 'MCH1-02')", 
-                "AND MachineCode IN ('MCH1-01', 'MCH1-02')", 
-                "AND sp.MachineCode IN ('MCH1-01', 'MCH1-02')");
+                "AND pr.MachineCode LIKE 'FINAL%'", 
+                "AND MachineCode LIKE 'FINAL%'", 
+                "AND sp.MachineCode LIKE 'FINAL%'");
             BuCharts.Add(acData);
 
             // LS Data from LSConnection

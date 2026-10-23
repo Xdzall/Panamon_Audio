@@ -1,187 +1,398 @@
 @*
-    Tombol "Move" di sidebar untuk pindah antar modul (RAC / CAC / MACHINE).
-    Modul aktif dideteksi dari URL, popup hanya menampilkan 2 modul lainnya.
-    CSS & JS dibuat mandiri karena dipakai juga oleh ACOEE Dashboard (Layout = null).
+    Tombol "Move" di sidebar untuk navigasi cepat antar modul Panamon Audio.
 *@
 @{
     var movePath = (Context.Request.Path.Value ?? string.Empty).ToLowerInvariant();
-    string currentModule =
-        movePath.StartsWith("/cac") ? "CAC" :
-        (movePath.StartsWith("/acoee") || movePath.StartsWith("/planmachine") || movePath.StartsWith("/planbrazing") || movePath.StartsWith("/planfinpress")) ? "MACHINE" :
-        "RAC";
+    var config = Context.RequestServices.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+    var dashboardUrl = config?["DashboardAudio:Url"] ?? "http://localhost:5108";
 
-    // Ikon RAC & CAC sebagai SVG langsung (tanpa library/internet):
-    //   RAC = Tabler "air-conditioning" (MIT), CAC = Material Symbols "air_purifier_gen" (Apache 2.0)
-    const string racSvg = "<svg class=\"move-card-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 16a3 3 0 0 1 -3 3\"/><path d=\"M16 16a3 3 0 0 0 3 3\"/><path d=\"M12 16v4\"/><path d=\"M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2l0 -4\"/><path d=\"M7 13v-3a1 1 0 0 1 1 -1h8a1 1 0 0 1 1 1v3\"/></svg>";
-    const string cacSvg = "<svg class=\"move-card-icon\" viewBox=\"0 -960 960 960\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M120-120v-600q0-50 35-85t85-35h160q50 0 85 35t35 85v600H120Zm280-240h40v-200h-40v200ZM200-200h240v-80h-40q-33 0-56.5-23.5T320-360v-200q0-33 23.5-56.5T400-640h40v-80q0-17-11.5-28.5T400-760H240q-17 0-28.5 11.5T200-720v520Zm488-217q-26 0-51-7t-49-18l25-76q20 9 39.5 15t36.5 6q12 0 24-4t25-12q24-17 48-23t46-6q25 0 51.5 6.5T933-518l-25 76q-23-8-42.5-14t-33.5-6q-12 0-26.5 4.5T775-442q-21 14-42.5 19.5T688-417Zm1-156q-26 0-52-7t-49-18l25-76q26 11 44 16t32 5q12 0 24-3.5t25-12.5q25-17 48.5-23t45.5-6q25 0 50 6.5t51 17.5l-25 76q-26-9-44-14.5t-32-5.5q-13 0-26.5 4T775-598q-18 13-40.5 19t-45.5 6Zm0 312q-26 0-51.5-7T588-286l25-76q22 10 41 15.5t35 5.5q12 0 24-3.5t25-12.5q23-16 49-22.5t46-6.5q25 0 51 7t49 17l-25 76q-26-9-44.5-14.5T832-306q-14 0-28.5 4.5T775-286q-17 12-39.5 18.5T689-261Zm-249 61v-528.5 8.5-8.5V-200Z\"/></svg>";
-
-    var moveTargets = new[]
+    var baseTargets = new[]
     {
-        new { Key = "RAC", Href = "/ProductionReport/index", Icon = "", Svg = racSvg, Desc = "Production Monitoring RAC", Css = "move-card-rac" },
-        new { Key = "CAC", Href = "/CAC/ProductionReport/index", Icon = "", Svg = cacSvg, Desc = "Production Monitoring CAC", Css = "move-card-cac" },
-        new { Key = "MACHINE", Href = "/ACOEE/dashboard", Icon = "fa-gears", Svg = "", Desc = "Production Monitoring Machine", Css = "move-card-machine" }
-    }.Where(t => t.Key != currentModule);
+        new { Key = "DASHBOARD", Href = dashboardUrl, Icon = "fa-gauge-high", Desc = "Audio Executive Dashboard", Bg = "rgba(14, 165, 233, 0.15)", Color = "#0ea5e9" },
+        new { Key = "FINAL ASSY", Href = "/ProductionReport/index", Icon = "fa-headphones", Desc = "Audio Final Assembly Lines", Bg = "rgba(56, 189, 248, 0.15)", Color = "#38bdf8" },
+        new { Key = "PERFORMANCE", Href = "/Perfomance/index", Icon = "fa-chart-line", Desc = "Line Efficiency & Cycle Time", Bg = "rgba(129, 140, 248, 0.15)", Color = "#818cf8" },
+        new { Key = "LOSS TIME", Href = "/LossTime/index", Icon = "fa-clock", Desc = "Downtime & Line Stops", Bg = "rgba(248, 113, 113, 0.15)", Color = "#f87171" },
+        new { Key = "INVENTORY", Href = "/Inventory/Index", Icon = "fa-boxes-stacked", Desc = "WIP & Stock Reconciliation", Bg = "rgba(251, 191, 36, 0.15)", Color = "#fbbf24" },
+        new { Key = "SUMMARY", Href = "/Summary/index", Icon = "fa-table-cells-large", Desc = "Executive Summary, SUT & Plan", Bg = "rgba(52, 211, 153, 0.15)", Color = "#34d399" },
+        new { Key = "QUALITY", Href = "/Quality/index", Icon = "fa-clipboard-check", Desc = "Defect Classification & Pareto", Bg = "rgba(232, 121, 249, 0.15)", Color = "#e879f9" },
+    };
+
+    var moveTargets = baseTargets.ToList();
+    if (User?.IsInRole("Administrator") == true || User?.IsInRole("Admin") == true)
+    {
+        moveTargets.Add(new { Key = "USER MGMT", Href = "/Identity/Account/Register", Icon = "fa-users-gear", Desc = "Kelola Akun & Hak Akses", Bg = "rgba(168, 85, 247, 0.15)", Color = "#a855f7" });
+    }
 }
 
 <li class="nav-item" id="moveNavItem" style="position: relative;">
-    <a href="#" id="moveMenuBtn" title="Pindah ke modul lain">
+    <a href="#" id="moveMenuBtn" title="Navigasi Audio">
         <i class="fa-solid fa-right-left"></i>
         <span class="nav-label">Move</span>
     </a>
-    <div id="moveMenuPopup" class="sidebar-move-popup" role="menu">
-        @foreach (var t in moveTargets)
-        {
-            <a class="move-card @t.Css" href="@t.Href" role="menuitem">
-                @if (t.Svg.Length > 0)
-                {
-                    @Html.Raw(t.Svg)
-                }
-                else
-                {
-                    <i class="fa-solid @t.Icon"></i>
-                }
-                <span class="move-card-name">@t.Key</span>
-                <span class="move-card-desc">@t.Desc</span>
-            </a>
-        }
+    <div id="moveMenuPopup" class="sidebar-move-popup" role="menu" aria-label="Audio Module Navigation">
+        <div class="move-popup-header">
+            <div class="move-header-title">
+                <i class="fa-solid fa-compass me-1"></i> Panamon Audio
+            </div>
+            <div class="move-header-subtitle">Navigasi Modul & Analisis</div>
+        </div>
+
+        <div class="move-popup-list">
+            @foreach (var t in moveTargets)
+            {
+                bool isCurrent = movePath.StartsWith(t.Href.ToLowerInvariant());
+                <a class="move-card @(isCurrent ? "active" : "")" href="@t.Href" role="menuitem">
+                    <div class="move-card-icon" style="background: @t.Bg; color: @t.Color;">
+                        <i class="fa-solid @t.Icon"></i>
+                    </div>
+                    <div class="move-card-info">
+                        <div class="move-card-title-row">
+                            <span class="move-card-title">@t.Key</span>
+                            @if (isCurrent)
+                            {
+                                <span class="move-badge-active">Active</span>
+                            }
+                        </div>
+                        <span class="move-card-desc">@t.Desc</span>
+                    </div>
+                    <div class="move-card-arrow">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </div>
+                </a>
+            }
+        </div>
     </div>
 </li>
 
 <style>
-    #bdSidebar .sidebar-move-popup {
-        display: none;
-        flex-direction: column;
-        gap: 8px;
-        position: absolute;
-        left: 100%;
-        top: 0;
-        margin-left: 8px;
-        padding: 8px;
-        min-width: 170px;
-        background: #1c2440 !important;
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
-        z-index: 9999;
-    }
+/* ============================================================
+   SIDEBAR MOVE POPUP - PANAMON AUDIO
+   ============================================================ */
+#bdSidebar .sidebar-move-popup {
+    display: none;
+    position: absolute;
+    left: 100%;
+    bottom: 0;
+    margin-left: 10px;
+    width: 285px;
+    background: #172036 !important;
+    border: 1px solid rgba(255, 255, 255, 0.20) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+    padding: 10px !important;
+    z-index: 99999 !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    box-sizing: border-box !important;
+}
 
-        #bdSidebar .sidebar-move-popup.open {
-            display: flex;
-        }
+#bdSidebar .sidebar-move-popup.show {
+    display: flex !important;
+}
 
-    #bdSidebar .nav-item .sidebar-move-popup a.move-card {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 4px;
-        width: 100% !important;
-        height: auto !important;
-        min-height: 84px;
-        padding: 12px 10px !important;
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 2px solid rgba(255, 255, 255, 0.12) !important;
-        border-radius: 10px !important;
-        color: #ffffff !important;
-        opacity: 1 !important;
-        text-decoration: none !important;
-        transition: border-color .15s ease, background .15s ease, transform .15s ease !important;
-    }
+/* Header */
+#bdSidebar .sidebar-move-popup .move-popup-header {
+    padding: 2px 6px 8px 6px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10) !important;
+    margin-bottom: 8px !important;
+}
 
-        #bdSidebar .nav-item .sidebar-move-popup a.move-card:hover {
-            transform: translateX(2px);
-        }
+#bdSidebar .sidebar-move-popup .move-header-title {
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    letter-spacing: 0.5px !important;
+    text-transform: uppercase !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
 
-        #bdSidebar .nav-item .sidebar-move-popup a.move-card i {
-            font-size: 24px;
-            margin: 0;
-        }
+#bdSidebar .sidebar-move-popup .move-header-title i {
+    color: #38bdf8 !important;
+    font-size: 12px !important;
+}
 
-    #bdSidebar .sidebar-move-popup .move-card-name {
-        font-size: 13px;
-        font-weight: 800;
-        letter-spacing: 1.5px;
-        line-height: 1.1;
-    }
+#bdSidebar .sidebar-move-popup .move-header-subtitle {
+    font-size: 10px !important;
+    color: #94a3b8 !important;
+    margin-top: 1px !important;
+}
 
-    #bdSidebar .sidebar-move-popup .move-card-desc {
-        font-size: 9.5px;
-        font-weight: 500;
-        line-height: 1.2;
-        text-align: center;
-        opacity: .65;
-    }
+/* List Container */
+#bdSidebar .sidebar-move-popup .move-popup-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
 
-    #bdSidebar .sidebar-move-popup .move-card-icon {
-        width: 26px;
-        height: 26px;
-        flex-shrink: 0;
-    }
+/* Move Card Anchor - Override #bdSidebar .nav-item a Completely */
+#bdSidebar .nav-item .sidebar-move-popup a.move-card,
+#bdSidebar .sidebar-move-popup a.move-card,
+#bdSidebar a.move-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 48px !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 7px 10px !important;
+    border-radius: 8px !important;
+    text-decoration: none !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    box-sizing: border-box !important;
+    gap: 10px !important;
+    transition: all 0.16s ease !important;
+    line-height: normal !important;
+}
 
-    #bdSidebar .sidebar-move-popup .move-card-rac i,
-    #bdSidebar .sidebar-move-popup .move-card-rac .move-card-icon { color: #4fc3f7 !important; }
-    #bdSidebar .sidebar-move-popup .move-card-cac i,
-    #bdSidebar .sidebar-move-popup .move-card-cac .move-card-icon { color: #f39c12 !important; }
-    #bdSidebar .sidebar-move-popup .move-card-machine i { color: #2ecc71 !important; }
+#bdSidebar .nav-item .sidebar-move-popup a.move-card:hover,
+#bdSidebar .sidebar-move-popup a.move-card:hover {
+    background: rgba(255, 255, 255, 0.10) !important;
+    border-color: rgba(56, 189, 248, 0.45) !important;
+    transform: translateX(3px) !important;
+}
 
-    #bdSidebar .nav-item .sidebar-move-popup a.move-card-rac:hover {
-        border-color: #4fc3f7 !important;
-        background: rgba(79, 195, 247, 0.15) !important;
-    }
+#bdSidebar .nav-item .sidebar-move-popup a.move-card.active,
+#bdSidebar .sidebar-move-popup a.move-card.active {
+    background: rgba(56, 189, 248, 0.14) !important;
+    border-color: rgba(56, 189, 248, 0.50) !important;
+}
 
-    #bdSidebar .nav-item .sidebar-move-popup a.move-card-cac:hover {
-        border-color: #f39c12 !important;
-        background: rgba(243, 156, 18, 0.15) !important;
-    }
+#bdSidebar .nav-item .sidebar-move-popup a.move-card.active::before {
+    display: none !important;
+}
 
-    #bdSidebar .nav-item .sidebar-move-popup a.move-card-machine:hover {
-        border-color: #2ecc71 !important;
-        background: rgba(46, 204, 113, 0.15) !important;
-    }
+/* Icon Box */
+#bdSidebar .sidebar-move-popup .move-card-icon {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+}
 
-    body.light-mode #bdSidebar .sidebar-move-popup,
-    body.light-theme #bdSidebar .sidebar-move-popup {
-        background: #ffffff !important;
-        border-color: rgba(26, 26, 46, 0.2);
-        box-shadow: 0 8px 24px rgba(26, 26, 46, 0.25);
-    }
+#bdSidebar .sidebar-move-popup .move-card-icon i {
+    font-size: 15px !important;
+    width: auto !important;
+    height: auto !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-block !important;
+}
 
-    body.light-mode #bdSidebar .nav-item .sidebar-move-popup a.move-card,
-    body.light-theme #bdSidebar .nav-item .sidebar-move-popup a.move-card {
-        color: #1a1a2e !important;
-        background: rgba(26, 26, 46, 0.03) !important;
-        border-color: rgba(26, 26, 46, 0.15) !important;
-    }
+/* Info Box */
+#bdSidebar .sidebar-move-popup .move-card-info {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    text-align: left !important;
+    overflow: hidden !important;
+}
+
+#bdSidebar .sidebar-move-popup .move-card-title-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 6px !important;
+}
+
+#bdSidebar .sidebar-move-popup .move-card-title {
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    color: #f1f5f9 !important;
+    letter-spacing: 0.3px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+#bdSidebar .sidebar-move-popup a.move-card.active .move-card-title {
+    color: #38bdf8 !important;
+}
+
+#bdSidebar .sidebar-move-popup .move-badge-active {
+    font-size: 8.5px !important;
+    font-weight: 700 !important;
+    padding: 1px 6px !important;
+    border-radius: 999px !important;
+    background: rgba(56, 189, 248, 0.25) !important;
+    color: #38bdf8 !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    flex-shrink: 0 !important;
+}
+
+#bdSidebar .sidebar-move-popup .move-card-desc {
+    font-size: 9.5px !important;
+    color: #94a3b8 !important;
+    line-height: 1.2 !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+/* Arrow */
+#bdSidebar .sidebar-move-popup .move-card-arrow {
+    color: rgba(255, 255, 255, 0.25) !important;
+    font-size: 11px !important;
+    margin-left: 2px !important;
+    transition: transform 0.16s ease, color 0.16s ease !important;
+    flex-shrink: 0 !important;
+}
+
+#bdSidebar .sidebar-move-popup a.move-card:hover .move-card-arrow {
+    color: #38bdf8 !important;
+    transform: translateX(2px) !important;
+}
+
+/* ============================================================
+   LIGHT MODE OVERRIDES
+   ============================================================ */
+body.light-mode #bdSidebar .sidebar-move-popup {
+    background: #ffffff !important;
+    border-color: rgba(0, 0, 0, 0.12) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-popup-header {
+    border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-header-title {
+    color: #0f172a !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-header-subtitle {
+    color: #64748b !important;
+}
+
+body.light-mode #bdSidebar .nav-item .sidebar-move-popup a.move-card,
+body.light-mode #bdSidebar .sidebar-move-popup a.move-card {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+
+body.light-mode #bdSidebar .nav-item .sidebar-move-popup a.move-card:hover,
+body.light-mode #bdSidebar .sidebar-move-popup a.move-card:hover {
+    background: #f1f5f9 !important;
+    border-color: #0284c7 !important;
+}
+
+body.light-mode #bdSidebar .nav-item .sidebar-move-popup a.move-card.active,
+body.light-mode #bdSidebar .sidebar-move-popup a.move-card.active {
+    background: rgba(2, 132, 199, 0.08) !important;
+    border-color: #0284c7 !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-card-title {
+    color: #0f172a !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup a.move-card.active .move-card-title {
+    color: #0284c7 !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-card-desc {
+    color: #64748b !important;
+}
+
+body.light-mode #bdSidebar .sidebar-move-popup .move-card-arrow {
+    color: #94a3b8 !important;
+}
 </style>
 
 <script>
-    (function () {
-        var btn = document.getElementById('moveMenuBtn');
-        var popup = document.getElementById('moveMenuPopup');
-        if (!btn || !popup) return;
+(function () {
+    var btn = document.getElementById('moveMenuBtn');
+    var popup = document.getElementById('moveMenuPopup');
+    if (!btn || !popup) return;
 
-        function close() {
-            popup.classList.remove('open');
-            popup.style.top = '';
+    function closePopup() {
+        popup.classList.remove('show');
+        popup.style.bottom = '';
+        popup.style.top = '';
+    }
+
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Tutup More Menu jika sedang terbuka
+        var morePopup = document.getElementById('moreMenuPopup');
+        if (morePopup) morePopup.style.display = 'none';
+
+        var isOpen = popup.classList.contains('show');
+        if (isOpen) {
+            closePopup();
+            return;
         }
 
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (popup.classList.contains('open')) { close(); return; }
+        popup.classList.add('show');
 
-            popup.classList.add('open');
-            // Geser ke atas kalau popup terpotong di bawah layar.
-            var overflow = popup.getBoundingClientRect().bottom - (window.innerHeight - 8);
-            if (overflow > 0) popup.style.top = (-overflow) + 'px';
-        });
+        // Kalkulasi posisi vertikal agar tidak keluar layar (clamping cerdas)
+        var btnRect = btn.getBoundingClientRect();
+        var popupHeight = popup.offsetHeight || 370;
+        var windowHeight = window.innerHeight;
 
-        document.addEventListener('click', function (e) {
-            if (!btn.contains(e.target) && !popup.contains(e.target)) close();
-        });
+        // Default: sejajar bawah dengan tombol Move
+        popup.style.bottom = '0px';
+        popup.style.top = 'auto';
 
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') close();
+        var popupRect = popup.getBoundingClientRect();
+        if (popupRect.top < 12) {
+            // Jika melebihi bagian atas layar, dorong ke bawah dengan jarak aman 12px
+            var diff = 12 - popupRect.top;
+            popup.style.bottom = (-diff) + 'px';
+        } else if (popupRect.bottom > windowHeight - 12) {
+            // Jika melebihi bagian bawah layar, angkat ke atas
+            var diffBottom = popupRect.bottom - (windowHeight - 12);
+            popup.style.bottom = diffBottom + 'px';
+        }
+    });
+
+    // Tutup popup jika klik di luar
+    document.addEventListener('click', function (e) {
+        if (!popup.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            closePopup();
+        }
+    });
+
+    // Tutup jika tekan tombol Escape
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePopup();
+    });
+
+    // Tutup jika tombol More diklik
+    var moreBtn = document.getElementById('moreMenuBtn');
+    if (moreBtn) {
+        moreBtn.addEventListener('click', function () {
+            closePopup();
         });
-    })();
+    }
+})();
 </script>

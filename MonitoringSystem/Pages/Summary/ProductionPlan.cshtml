@@ -1,24 +1,11 @@
-    @page
+﻿    @page
     @model MonitoringSystem.Pages.Shared.ProductionPlanModel
     @{
         ViewData["Title"] = "Production Plan";
         string formattedDate = DateTime.Now.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("en-US"));
     }
 
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>@ViewData["Title"]</title>
-        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-        <link href="~/css/Sidebar.css" rel="stylesheet" />
-        <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-
-        @* SweetAlert2 *@
-        <link rel="stylesheet" href="~/css/sweetalert2.css" />
-
-        <style>
+    <style>
             /* Pastikan parent container punya position relative */
             .input-group.position-relative {
                 position: relative !important;
@@ -113,8 +100,8 @@
             .filter-area-with-lines {
                 position: relative;
                 padding: 1px 0;
-                margin-bottom: -63px !important;
-                margin-top: -20px;
+                margin-bottom: 8px !important;
+                margin-top: 0px;
                 min-height: 10px;
                 width: calc(100% - 14px);
                 margin-left: 7px;
@@ -583,8 +570,6 @@
                 color: #ffffff !important;
             }
         </style>
-    </head>
-    <body>
     <div class="filter-area-with-lines">    
         <div class="panamon-bottom-line"></div>
         <div class="panamon-bottomm-line"></div>
@@ -603,11 +588,20 @@
                         <div class="d-flex align-items-center gap-2">
                             <label class="mb-0">Machine</label>
                            <select class="form-select-sm" style="width: 90px;" name="FilterMachineCode" asp-for="FilterMachineCode">
-                                <option value="MCH1-01">CU</option>
-                                <option value="MCH1-02">CS</option>
-                                <!option value="">CB</!option>
-                                <!option value="">EVA</!option>
-                                <!option value="">COND</!option>
+                                    <option value="FINAL1">FINAL 1</option>
+                                    <option value="FINAL2">FINAL 2</option>
+                                    <option value="FINAL3">FINAL 3</option>
+                                    <option value="FINAL4">FINAL 4</option>
+                                    <option value="FINAL5">FINAL 5</option>
+                                    <option value="FINAL6">FINAL 6</option>
+                                    <option value="FINAL7">FINAL 7</option>
+                                    <option value="FINAL8">FINAL 8</option>
+                                    <option value="FINAL9">FINAL 9</option>
+                                    <option value="FINAL10">FINAL 10</option>
+                                    <option value="FINAL11">FINAL 11</option>
+                                
+                                
+                                
                             </select>
                         </div>
 
@@ -634,7 +628,7 @@
                         <div class="modal-body">
                             <div class="mb-3 text-center">
                                 <div class="d-flex justify-content-center gap-2">
-                                    <a asp-page-handler="DownloadTemplate" asp-route-type="cu" class="btn btn-sm btn-outline-success d-flex align-items-center gap-1">
+                                    <a asp-page-handler="DownloadTemplate"  class="btn btn-sm btn-outline-success d-flex align-items-center gap-1">
                                         <i class="bi bi-file-earmark-excel-fill"></i>
                                         Template
                                     </a>
@@ -650,8 +644,17 @@
                                 <div class="form-group mb-3">
                                     <label for="TargetMachine" class="form-label fw-bold">Untuk Mesin:</label>
                                     <select id="TargetMachine" name="TargetMachine" class="form-select" required>
-                                        <option value="MCH1-01">CU</option>
-                                        <option value="MCH1-02">CS</option>
+                                    <option value="FINAL1">FINAL 1</option>
+                                    <option value="FINAL2">FINAL 2</option>
+                                    <option value="FINAL3">FINAL 3</option>
+                                    <option value="FINAL4">FINAL 4</option>
+                                    <option value="FINAL5">FINAL 5</option>
+                                    <option value="FINAL6">FINAL 6</option>
+                                    <option value="FINAL7">FINAL 7</option>
+                                    <option value="FINAL8">FINAL 8</option>
+                                    <option value="FINAL9">FINAL 9</option>
+                                    <option value="FINAL10">FINAL 10</option>
+                                    <option value="FINAL11">FINAL 11</option>
                                     </select>
                                 </div>
 
@@ -688,8 +691,7 @@
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="card">
+<div class="card w-100 shadow-sm mt-3">
             <form id="form-production-plan" method="post" asp-page-handler="InsertProductionRecord">
                 <input type="hidden" name="FilterMachineCode" value="@Model.FilterMachineCode" />
                 <input type="hidden" name="TargetDate" value="@Model.CurrentDate.ToString("yyyy-MM-dd")" />
@@ -711,7 +713,8 @@
                         </div>
                     </div>
                 </div>
-                <table class="table table-bordered" style="border-width: 3px !important;">
+                <div class="table-responsive w-100">
+<table class="table table-bordered w-100" style="border-width: 3px !important;">
                     <thead>
                         <tr class="text-center">
                             <th colspan="3">Original</th>
@@ -889,6 +892,7 @@
                         }
     </tbody>
                 </table>
+</div>
                <div class="row">
         <div class="col-12 mb-3 d-flex justify-content-end">
             <button type="button" class="btn btn-success btn-sm" onclick="addNewRow()">
@@ -1762,5 +1766,4 @@
                 tableBody.querySelectorAll('tr').forEach(row => calculateHourForRow(row));
             });
         </script>
-    </body>
-    </html>
+    

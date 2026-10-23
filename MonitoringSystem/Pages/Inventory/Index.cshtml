@@ -44,11 +44,17 @@
                         <label class="mb-0">Machine Line</label>
                         <select class="form-select" style="width: 120px;" name="FilterMachineLine">
                             <option value="" selected="@(string.IsNullOrEmpty(Model.FilterMachineLine))">All</option>
-                            <option value="MCH1-01" selected="@(Model.FilterMachineLine == "MCH1-01")">CU</option>
-                            <option value="MCH1-02" selected="@(Model.FilterMachineLine == "MCH1-02")">CS</option>
-                            <option value="">CB</option>
-                            <option value="">EVA</option>
-                            <option value="">COND</option>
+                            <option value="FINAL1" selected="@(Model.FilterMachineLine == "FINAL1")">FINAL 1</option>
+                            <option value="FINAL2" selected="@(Model.FilterMachineLine == "FINAL2")">FINAL 2</option>
+                            <option value="FINAL3" selected="@(Model.FilterMachineLine == "FINAL3")">FINAL 3</option>
+                            <option value="FINAL4" selected="@(Model.FilterMachineLine == "FINAL4")">FINAL 4</option>
+                            <option value="FINAL5" selected="@(Model.FilterMachineLine == "FINAL5")">FINAL 5</option>
+                            <option value="FINAL6" selected="@(Model.FilterMachineLine == "FINAL6")">FINAL 6</option>
+                            <option value="FINAL7" selected="@(Model.FilterMachineLine == "FINAL7")">FINAL 7</option>
+                            <option value="FINAL8" selected="@(Model.FilterMachineLine == "FINAL8")">FINAL 8</option>
+                            <option value="FINAL9" selected="@(Model.FilterMachineLine == "FINAL9")">FINAL 9</option>
+                            <option value="FINAL10" selected="@(Model.FilterMachineLine == "FINAL10")">FINAL 10</option>
+                            <option value="FINAL11" selected="@(Model.FilterMachineLine == "FINAL11")">FINAL 11</option>
                         </select>
                     </div>
                     <div class="d-flex align-items-center gap-2">
@@ -166,6 +172,7 @@
         </div>
     </div>
 </div>
+
 </div>
 
 <script>

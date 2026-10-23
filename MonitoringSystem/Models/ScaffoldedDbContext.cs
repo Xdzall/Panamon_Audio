@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
@@ -72,13 +72,35 @@ public partial class ScaffoldedDbContext : DbContext
     public virtual DbSet<StationDefectC> StationDefectCs { get; set; }
     public virtual DbSet<SubmitCount> SubmitCounts { get; set; }
     public virtual DbSet<WorkHourOpr> WorkHourOprs { get; set; }
-
-//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//        => optionsBuilder.UseSqlServer("Server=10.83.32.31;User Id=sa;Password=Bismillah1945;Database=WP_Production;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False");
+    public virtual DbSet<User> Users { get; set; }
+    public virtual DbSet<Role> Roles { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasKey(e => e.RoleId);
+            entity.ToTable("Roles");
+            entity.Property(e => e.RoleName).IsRequired();
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+            entity.ToTable("Users");
+            entity.Property(e => e.Username).IsRequired();
+            entity.Property(e => e.PasswordHash).IsRequired();
+            entity.Property(e => e.FullName).IsRequired();
+            entity.Property(e => e.Theme).HasDefaultValue("light");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
+
+            entity.HasOne(d => d.Role)
+                .WithMany(p => p.Users)
+                .HasForeignKey(d => d.RoleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Users_Roles_RoleId");
+        });
         modelBuilder.Entity<ActionDefect>(entity =>
         {
             entity.HasKey(e => e.ActionId);

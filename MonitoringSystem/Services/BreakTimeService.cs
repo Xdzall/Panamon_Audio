@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
 using MonitoringSystem.Data;
@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace MonitoringSystem.Services
 {
-    // Jadwal istirahat per tanggal. Aturannya ada di BreakSchedule (dipakai bersama Plclogger untuk loss time mesin).
+    // Jadwal istirahat per tanggal. Aturannya ada di BreakSchedule untuk loss time dan efisiensi.
     public class BreakTimeService
     {
         private readonly ApplicationDbContext _context;
@@ -56,44 +56,8 @@ namespace MonitoringSystem.Services
                 return BreakSchedule.Build(dateOnly, custom, Array.Empty<string>());
             }
 
-            // 2. Generate hardcoded times based on active shifts
-            var shiftModes = new List<string>();
-            var shiftModeStopwatch = Stopwatch.StartNew();
-
-            try
-            {
-                var connectionString = _configuration.GetConnectionString("DefaultConnection");
-                using (var connection = new SqlConnection(connectionString))
-                {
-                    await connection.OpenAsync();
-                    using (var command = new SqlCommand(BreakSchedule.ShiftModeSql, connection))
-                    {
-                        command.Parameters.AddWithValue("@date", dateOnly.ToDateTime(TimeOnly.MinValue));
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                shiftModes.Add(reader.GetString(0).ToUpper());
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error reading active shifts for {Date:yyyy-MM-dd}", date);
-            }
-            finally
-            {
-                shiftModeStopwatch.Stop();
-                _logger.LogInformation(
-                    "Break-time data for {Date:yyyy-MM-dd}: custom query {CustomBreakMs} ms; shift query {ShiftModeMs} ms",
-                    date,
-                    customBreakStopwatch.ElapsedMilliseconds,
-                    shiftModeStopwatch.ElapsedMilliseconds);
-            }
-
-            return BreakSchedule.Build(dateOnly, custom, shiftModes);
+            // 2. Default to standard Audio Shift 1 / Non-shift schedule
+            return BreakSchedule.Build(dateOnly, custom, new[] { "SHIFT 1" });
         }
     }
 }

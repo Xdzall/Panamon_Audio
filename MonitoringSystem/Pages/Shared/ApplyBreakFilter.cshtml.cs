@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -72,54 +72,11 @@ namespace MonitoringSystem.Pages.Shared
                 }).ToList();
             }
 
-            // 2. Generate hardcoded times based on active shifts
+            // 2. Standar jadwal shift Audio (Regular / Shift 1)
             var generated = new List<BreakTimeInput>();
-            var shiftModes = new List<string>();
-
-            try
-            {
-                var connectionString = _configuration.GetConnectionString("DefaultConnection");
-                using (var connection = new SqlConnection(connectionString))
-                {
-                    await connection.OpenAsync();
-                    var sql = @"
-                        SELECT DISTINCT UPPER(LTRIM(RTRIM(ShiftMode)))
-                        FROM [OEESN]
-                        WHERE [Date] >= @date
-                          AND [Date] < DATEADD(DAY, 1, @date)
-                          AND MachineCode IN ('MCH1-01', 'MCH1-02')
-                          AND SN_GOOD IS NOT NULL
-                          AND LTRIM(RTRIM(SN_GOOD)) <> ''
-                          AND ShiftMode IS NOT NULL";
-                    using (var command = new SqlCommand(sql, connection))
-                    {
-                        command.Parameters.AddWithValue("@date", date.ToDateTime(TimeOnly.MinValue));
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                shiftModes.Add(reader.GetString(0).ToUpper());
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Fallback silently if DB error
-                Console.WriteLine("Error reading active shifts: " + ex.Message);
-            }
-
-            bool hasShift1 = shiftModes.Any(s => s.Contains("SHIFT 1"));
-            bool hasShift3 = shiftModes.Any(s => s.Contains("SHIFT 3"));
-            bool hasNonShift = shiftModes.Any(s => s.Contains("NON-SHIFT"));
-
-            // If no data yet, it stays empty (future dates)
-            if (!hasShift1 && !hasShift3 && !hasNonShift) 
-            {
-                return generated; 
-            }
-
+            bool hasShift1 = true;
+            bool hasNonShift = false;
+            bool hasShift3 = false;
             if (hasShift1 || hasNonShift)
             {
                 generated.Add(new BreakTimeInput { StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(7, 7), Reason = "Morning Assembly" });

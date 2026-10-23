@@ -1,0 +1,26 @@
+## Build results
+[Bb]in/
+[Oo]bj/
+publish/
+
+## Data Protection Keys & Sensitive App Data
+App_Data/DataProtection-Keys/
+App_Data/**/*.xml
+
+## Logs
+Logs/
+*.log
+
+## Database backups & secrets
+*.bak
+appsettings.Production.json
+appsettings.Local.json
+.env
+
+## Temporary scripts
+test_login.ps1
+diff.txt
+test.txt
+x/
+cd
+scratch/

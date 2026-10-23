@@ -80,8 +80,8 @@ public class IndexModel : PageModel
         try
         {
             using var conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-            viewModel.DataAC.LineCU = await GetACLineData(conn, "MCH1-01");
-            viewModel.DataAC.LineCS = await GetACLineData(conn, "MCH1-02");
+            viewModel.DataAC.LineCU = await GetACLineData(conn, "FINAL1");
+            viewModel.DataAC.LineCS = await GetACLineData(conn, "FINAL2");
         }
         catch (Exception ex) { _logger.LogWarning(ex, "Data AC gagal"); }
 
@@ -614,8 +614,8 @@ public class IndexModel : PageModel
         var planSql = @"
             DECLARE @ProdDate DATE = CAST(DATEADD(hour, -7, GETDATE()) AS DATE);
             SELECT ISNULL(SUM(pr.Quantity), 0)
-            FROM PROMOSYS.dbo.ProductionRecords pr
-            INNER JOIN PROMOSYS.dbo.ProductionPlan pp ON pr.PlanId = pp.Id
+            FROM dbo.ProductionRecords pr
+            INNER JOIN dbo.ProductionPlan pp ON pr.PlanId = pp.Id
             WHERE pr.MachineCode = @Code
               AND CONVERT(date, pp.CurrentDate) = @ProdDate";
         result.DailyPlan = await conn.ExecuteScalarAsync<int?>(planSql, new { Code = machineCode }) ?? 0;
@@ -810,7 +810,7 @@ public class IndexModel : PageModel
                 WHERE CONVERT(date, Date) = CONVERT(date, GETDATE())
                   AND MachineCode = @MachineCode";
 
-            var allLossEvents = await connection.QueryAsync<dynamic>(lossQuery, new { MachineCode = "MCH1-01" });
+            var allLossEvents = await connection.QueryAsync<dynamic>(lossQuery, new { MachineCode = "FINAL1" });
 
             foreach (var ev in allLossEvents)
             {

@@ -1,4 +1,4 @@
-        @page
+﻿        @page
         @using System.Globalization;
         @model MonitoringSystem.Pages.LossTime.IndexModel
 @{
@@ -951,11 +951,20 @@
                 <label class="mb-0">Line</label>
                 <select class="form-select" style="width: 90px;" id="MachineLine" name="MachineLine" asp-for="MachineLine">
                     <option value="All">All</option>
-                    <option value="MCH1-01">CU</option>
-                    <option value="MCH1-02">CS</option>
-                    <!option value="">CB</!option>
-                    <!option value="">EVA</!option>
-                    <!option value="">COND</!option>
+                            <option value="FINAL1">FINAL 1</option>
+                            <option value="FINAL2">FINAL 2</option>
+                            <option value="FINAL3">FINAL 3</option>
+                            <option value="FINAL4">FINAL 4</option>
+                            <option value="FINAL5">FINAL 5</option>
+                            <option value="FINAL6">FINAL 6</option>
+                            <option value="FINAL7">FINAL 7</option>
+                            <option value="FINAL8">FINAL 8</option>
+                            <option value="FINAL9">FINAL 9</option>
+                            <option value="FINAL10">FINAL 10</option>
+                            <option value="FINAL11">FINAL 11</option>
+
+
+
                 </select>
             </div>
 
@@ -1025,28 +1034,13 @@
     </div>
 </div>
 
-<div class="row mt-2 loss-overview-row">
+
+                    <div class="row mt-2">
     <div class="col-md-8">
         <div class="card shadow-sm loss-chart-card">
-            <div class="card-header bg-transparent" style="border-bottom: none !important;">
-                <div class="loss-category-header-row">
-                    <h5 class="card-title loss-category-title mb-0 fw-bold fs-8 text-white">
-                        Loss Time Categories — @System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(Model.SelectedMonth)
-                        <small class="ms-2 opacity-75" style="font-size:11px;">
-                            [@Model.SelectedSource@(Model.SelectedSource == "Machine" && Model.SelectedMachineName != "All" ? $": {Model.SelectedMachineName}" : "")]
-                        </small>
-                        <span id="mttBadge" class="mtt-info-badge" style="display:none;">
-                            <span class="mtt-dot"></span> Machine &amp; Tools Trouble Only
-                        </span>
-                    </h5>
-
-                    <div id="summaryHeaderLegend" class="summary-header-legend">
-                        <button type="button" class="summary-legend-item" data-summary-dataset-index="0" style="--legend-color:rgba(201,203,207,0.95);">Last Month</button>
-                        <button type="button" class="summary-legend-item" data-summary-dataset-index="1" style="--legend-color:rgba(255,99,132,0.95);">Shift 1</button>
-                        <button type="button" class="summary-legend-item" data-summary-dataset-index="2" style="--legend-color:rgba(54,162,235,0.95);">Shift 2</button>
-                        <button type="button" class="summary-legend-item" data-summary-dataset-index="3" style="--legend-color:rgba(75,192,192,0.95);">Shift 3</button>
-                    </div>
-
+            <div class="card-header bg-transparent">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="card-title mb-0 fw-bold fs-8 text-white">Loss Time Chart</h5>
                     <div class="d-flex align-items-center gap-2 loss-category-actions">
                         <div class="dropdown">
                             <button type="button"
@@ -1332,8 +1326,17 @@
                         <label class="form-label fw-bold">2. Select Target Machine for Actual Data</label>
                         <select name="UploadMachineLine" class="form-select" required>
                             <option value="">-- Pilih Machine --</option>
-                            <option value="MCH1-01">MCH1-01 (CU)</option>
-                            <option value="MCH1-02">MCH1-02 (CS)</option>
+                            <option value="FINAL1">FINAL 1</option>
+                            <option value="FINAL2">FINAL 2</option>
+                            <option value="FINAL3">FINAL 3</option>
+                            <option value="FINAL4">FINAL 4</option>
+                            <option value="FINAL5">FINAL 5</option>
+                            <option value="FINAL6">FINAL 6</option>
+                            <option value="FINAL7">FINAL 7</option>
+                            <option value="FINAL8">FINAL 8</option>
+                            <option value="FINAL9">FINAL 9</option>
+                            <option value="FINAL10">FINAL 10</option>
+                            <option value="FINAL11">FINAL 11</option>
                         </select>
                         <div class="form-text text-muted">You must specify which machine this file belongs to.</div>
                     </div>

@@ -5,62 +5,167 @@ using System.Data;
 
 namespace MonitoringSystem.Pages.Summary
 {
-    // Kelas Data Mentah
-    public class RawOeeData { public DateTime SDate { get; set; } public string MachineCode { get; set; } public string ProductName { get; set; } public int SUT { get; set; } public int NoOfOperator { get; set; } public decimal TargetUnit { get; set; } }
+    public class RawOeeData 
+    { 
+        public DateTime SDate { get; set; } 
+        public string MachineCode { get; set; } = ""; 
+        public string ProductName { get; set; } = ""; 
+        public int SUT { get; set; } 
+        public int NoOfOperator { get; set; } 
+        public decimal TargetUnit { get; set; } 
+        public int Actual { get; set; }
+        public int DailyPlan { get; set; }
+    }
 
     public class DailyPlanQty
     {
         public decimal Quantity { get; set; }
-        public string MachineCode { get; set; }
+        public string MachineCode { get; set; } = "";
     }
 
-    public class RawNgData { public DateTime SDate { get; set; } public string MachineCode { get; set; } }
-    public class RawRestTimeData { public string DayType { get; set; } public TimeSpan StartTime { get; set; } public TimeSpan EndTime { get; set; } }
-    public class RawLossTimeData { public DateTime Date { get; set; } public TimeSpan StartTime { get; set; } public TimeSpan EndTime { get; set; } public string MachineCode { get; set; } }
+    public class RawNgData 
+    { 
+        public DateTime SDate { get; set; } 
+        public string MachineCode { get; set; } = ""; 
+    }
+
+    public class RawRestTimeData 
+    { 
+        public string DayType { get; set; } = ""; 
+        public TimeSpan StartTime { get; set; } 
+        public TimeSpan EndTime { get; set; } 
+    }
+
+    public class RawLossTimeData 
+    { 
+        public DateTime Date { get; set; } 
+        public TimeSpan StartTime { get; set; } 
+        public TimeSpan EndTime { get; set; } 
+        public string MachineCode { get; set; } = ""; 
+    }
+
+    public class ShiftLineSummary
+    {
+        public int ShiftNumber { get; set; }
+        public string MachineCode { get; set; } = "";
+        public string LineName { get; set; } = "";
+        public long DailyPlan { get; set; }
+        public long Plan { get; set; }
+        public long Actual { get; set; }
+        public long Difference => Actual - Plan;
+        public double LossTimeMinutes { get; set; }
+        public double WorkTimeMinutes { get; set; }
+        public DateTime? ModelStartTime { get; set; }
+        public DateTime? ModelEndTime { get; set; }
+        public double OprRatio => (WorkTimeMinutes > 0) ? Math.Max(0, Math.Min(100.0, Math.Round(((WorkTimeMinutes - LossTimeMinutes) / WorkTimeMinutes) * 100, 2))) : 100.0;
+        public double WorkEff => (Plan > 0) ? Math.Round(((double)Actual / Plan) * 100, 2) : (Actual > 0 ? 100.0 : 0.0);
+        public long DefectQty { get; set; }
+        public double DefectRatio => (Actual + DefectQty > 0) ? Math.Max(0, Math.Min(100.0, Math.Round((1.0 - ((double)DefectQty / (Actual + DefectQty))) * 100, 2))) : 100.0;
+        public double TotalEff => Math.Round((OprRatio / 100.0) * (WorkEff / 100.0) * (DefectRatio / 100.0) * 100.0, 2);
+        public double Pph { get; set; }
+        public int ModelChanges { get; set; }
+        public double ModelTimeChange { get; set; }
+    }
+
+    public class OverallLineSummary
+    {
+        public string MachineCode { get; set; } = "";
+        public string LineName { get; set; } = "";
+        public long DailyPlan { get; set; }
+        public long Plan { get; set; }
+        public long Actual { get; set; }
+        public long Difference => Actual - Plan;
+        public double LossTimeMinutes { get; set; }
+        public double WorkTimeMinutes { get; set; }
+        public double OprRatio => (WorkTimeMinutes > 0) ? Math.Max(0, Math.Min(100.0, Math.Round(((WorkTimeMinutes - LossTimeMinutes) / WorkTimeMinutes) * 100, 2))) : 100.0;
+        public double WorkEff => (Plan > 0) ? Math.Round(((double)Actual / Plan) * 100, 2) : (Actual > 0 ? 100.0 : 0.0);
+        public long DefectQty { get; set; }
+        public double DefectRatio => (Actual + DefectQty > 0) ? Math.Max(0, Math.Min(100.0, Math.Round((1.0 - ((double)DefectQty / (Actual + DefectQty))) * 100, 2))) : 100.0;
+        public double TotalEff => Math.Round((OprRatio / 100.0) * (WorkEff / 100.0) * (DefectRatio / 100.0) * 100.0, 2);
+        public int ModelChanges { get; set; }
+        public double ModelTimeChange { get; set; }
+    }
 
     public class SummaryModel : PageModel
     {
-        public string connectionString = "Server=10.83.33.103;User Id=sa;Password=sa;Database=PROMOSYS;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False";
+        public static readonly string[] AudioLineCodes = 
+        { 
+            "FINAL1", "FINAL2", "FINAL3", "FINAL4", "FINAL5", 
+            "FINAL6", "FINAL7", "FINAL8", "FINAL9", "FINAL10", "FINAL11" 
+        };
+
+        public static readonly Dictionary<string, string> AudioLineNames = new Dictionary<string, string>
+        {
+            { "FINAL1", "FINAL 1" },
+            { "FINAL2", "FINAL 2" },
+            { "FINAL3", "FINAL 3" },
+            { "FINAL4", "FINAL 4" },
+            { "FINAL5", "FINAL 5" },
+            { "FINAL6", "FINAL 6" },
+            { "FINAL7", "FINAL 7" },
+            { "FINAL8", "FINAL 8" },
+            { "FINAL9", "FINAL 9" },
+            { "FINAL10", "FINAL 10" },
+            { "FINAL11", "FINAL 11" }
+        };
+
+        public string connectionString = "Server=localhost\\SQLEXPRESS;Database=AUDIO_PRODUCTION;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False";
         public string errorMessage = "";
 
         // Properti publik untuk menampung semua data mentah
-        public List<RawOeeData> RawOeeData { get; private set; }
-        public List<RawNgData> RawNgData { get; private set; }
-        public List<DailyPlanQty> DailyPlanData { get; private set; }
-        public List<PlanQty> PlanData { get; private set; }
-        public List<RawRestTimeData> RawRestTimeData { get; private set; }
-        public List<RawLossTimeData> RawLossTimeData { get; private set; } // PENAMBAHAN BARU
+        public List<RawOeeData> RawOeeData { get; private set; } = new();
+        public List<RawNgData> RawNgData { get; private set; } = new();
+        public List<DailyPlanQty> DailyPlanData { get; private set; } = new();
+        public List<PlanQty> PlanData { get; private set; } = new();
+        public List<RawRestTimeData> RawRestTimeData { get; private set; } = new();
+        public List<RawLossTimeData> RawLossTimeData { get; private set; } = new();
+
+        // Koleksi summary yang sudah dihitung per lini Audio
+        public List<ShiftLineSummary> Shift1Summaries { get; private set; } = new();
+        public List<ShiftLineSummary> Shift2Summaries { get; private set; } = new();
+        public List<ShiftLineSummary> Shift3Summaries { get; private set; } = new();
+        public List<OverallLineSummary> OverallSummaries { get; private set; } = new();
 
         public SummaryModel()
         {
-            // Inisialisasi list
-            RawOeeData = new List<RawOeeData>();
-            RawNgData = new List<RawNgData>();
-            PlanData = new List<PlanQty>();
-            RawRestTimeData = new List<RawRestTimeData>();
-            RawLossTimeData = new List<RawLossTimeData>(); // PENAMBAHAN BARU
-            DailyPlanData = new List<DailyPlanQty>();
         }
 
         [BindProperty] public DateTime StartSelectedDate { get; set; } = DateTime.Today;
         [BindProperty] public DateTime EndSelectedDate { get; set; } = DateTime.Today;
 
-        private void InitializePage() { LoadRawDataForDateRange(); }
-        public void OnGet() { StartSelectedDate = DateTime.Today; EndSelectedDate = DateTime.Today; InitializePage(); }
-        public void OnPost() { if (EndSelectedDate < StartSelectedDate) { EndSelectedDate = StartSelectedDate; } InitializePage(); }
+        private void InitializePage() 
+        { 
+            LoadRawDataForDateRange(); 
+            CalculateAllSummaries();
+        }
 
-        // GANTI SELURUH ISI METODE DENGAN KODE DI BAWAH INI
+        public void OnGet() 
+        { 
+            StartSelectedDate = DateTime.Today; 
+            EndSelectedDate = DateTime.Today; 
+            InitializePage(); 
+        }
+
+        public void OnPost() 
+        { 
+            if (EndSelectedDate < StartSelectedDate) 
+            { 
+                EndSelectedDate = StartSelectedDate; 
+            } 
+            InitializePage(); 
+        }
+
         private void LoadRawDataForDateRange()
         {
             var globalStartTime = StartSelectedDate.Date;
             var globalEndTime = EndSelectedDate.Date.AddDays(1).AddHours(7);
 
-            // Kosongkan list agar tidak double
             RawOeeData.Clear();
             RawNgData.Clear();
             PlanData.Clear();
             RawRestTimeData.Clear();
             RawLossTimeData.Clear();
+            DailyPlanData.Clear();
 
             try
             {
@@ -68,18 +173,29 @@ namespace MonitoringSystem.Pages.Summary
                 {
                     connection.Open();
 
-                    // 🔹 Query 1: Ambil data OEE + Target langsung dari OEESN
+                    // Query 1: Data produksi & Target langsung dari seluruh 11 lini Audio (FINAL1..11)
                     string oeeSql = @"
-                SELECT 
-                    OEESN.SDate,
-                    OEESN.MachineCode,
-                    md.ProductName,
-                    md.SUT,
-                    OEESN.NoOfOperator,
-                    ISNULL(OEESN.TargetUnit, 0) AS TargetUnit
-                FROM OEESN
-                JOIN MasterData md ON OEESN.Product_Id = md.Product_Id
-                WHERE OEESN.SDate >= @StartTime AND OEESN.SDate < @EndTime";
+                        SELECT DateTime AS SDate, 'FINAL1' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL1 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL2' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL2 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL3' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 25) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL3 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL4' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 40) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL4 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL5' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 40) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL5 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL6' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL6 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL7' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL7 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL8' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL8 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL9' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL9 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL10' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 25) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL10 WHERE DateTime >= @StartTime AND DateTime < @EndTime
+                        UNION ALL
+                        SELECT DateTime AS SDate, 'FINAL11' AS MachineCode, ISNULL(Model, 'Audio Model') AS ProductName, ISNULL(Sut, 30) AS SUT, 12 AS NoOfOperator, ISNULL(Target, 0) AS TargetUnit, ISNULL(Actual, 0) AS Actual, ISNULL(DailyPlan, 0) AS DailyPlan FROM dbo.FINAL11 WHERE DateTime >= @StartTime AND DateTime < @EndTime";
 
                     using (SqlCommand cmd = new SqlCommand(oeeSql, connection))
                     {
@@ -96,14 +212,20 @@ namespace MonitoringSystem.Pages.Summary
                                     ProductName = reader.GetString(2),
                                     SUT = reader.GetInt32(3),
                                     NoOfOperator = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
-                                    TargetUnit = reader.IsDBNull(5) ? 0 : Convert.ToDecimal(reader.GetValue(5))
+                                    TargetUnit = reader.IsDBNull(5) ? 0 : Convert.ToDecimal(reader.GetValue(5)),
+                                    Actual = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                                    DailyPlan = reader.IsDBNull(7) ? 0 : reader.GetInt32(7)
                                 });
                             }
                         }
                     }
 
-                    // 🔹 Query 2: NG Data
-                    string ngSql = @"SELECT SDate, MachineCode FROM NG_RPTS WHERE SDate >= @StartTime AND SDate < @EndTime";
+                    // Query 2: Defect Data dari dbo.DEFECTT (Normalisasi FNL Assy X -> FINALX)
+                    string ngSql = @"
+                        SELECT DateTime AS SDate, 
+                               REPLACE(REPLACE(MachineCode, 'FNL Assy ', 'FINAL'), ' ', '') AS MachineCode 
+                        FROM dbo.DEFECTT 
+                        WHERE DateTime >= @StartTime AND DateTime < @EndTime";
                     using (SqlCommand cmd = new SqlCommand(ngSql, connection))
                     {
                         cmd.Parameters.AddWithValue("@StartTime", globalStartTime);
@@ -111,15 +233,17 @@ namespace MonitoringSystem.Pages.Summary
                         using (SqlDataReader reader = cmd.ExecuteReader())
                         {
                             while (reader.Read())
+                            {
                                 RawNgData.Add(new RawNgData
                                 {
                                     SDate = reader.GetDateTime(0),
                                     MachineCode = reader.GetString(1)
                                 });
+                            }
                         }
                     }
 
-                    // 🔹 Query 3: Waktu Istirahat
+                    // Query 3: Waktu Istirahat
                     string restTimeSql = @"SELECT DayType, StartTime, EndTime FROM RestTime";
                     using (SqlCommand cmd = new SqlCommand(restTimeSql, connection))
                     {
@@ -137,10 +261,10 @@ namespace MonitoringSystem.Pages.Summary
                         }
                     }
 
-                    // 🔹 Query 4: Loss Time
+                    // Query 4: Loss Time
                     string lossTimeSql = @"SELECT Date, Time, EndDateTime, MachineCode 
-                                   FROM AssemblyLossTime 
-                                   WHERE Date >= @StartTime AND Date < @EndTime";
+                                           FROM AssemblyLossTime 
+                                           WHERE Date >= @StartTime AND Date < @EndTime";
                     using (SqlCommand cmd = new SqlCommand(lossTimeSql, connection))
                     {
                         cmd.Parameters.AddWithValue("@StartTime", globalStartTime);
@@ -160,7 +284,7 @@ namespace MonitoringSystem.Pages.Summary
                         }
                     }
 
-                    // 🔹 Query 5: Daily Plan dari tabel ProductionRecords + ProductionPlan
+                    // Query 5: Daily Plan dari tabel ProductionRecords + ProductionPlan
                     string dailyPlanSql = @"
                         SELECT 
                             CAST(SUM(pr.Quantity) AS DECIMAL(10,0)) AS Quantity,
@@ -189,25 +313,238 @@ namespace MonitoringSystem.Pages.Summary
                             }
                         }
                     }
-
-
-                    // ✅ Debug Log
-                    Console.WriteLine($"[DEBUG] Loaded {RawOeeData.Count} OEE rows");
-                    Console.WriteLine($"[DEBUG] Total TargetUnit: {RawOeeData.Sum(x => x.TargetUnit)}");
                 }
             }
             catch (Exception ex)
             {
-                errorMessage = "Gagal memuat data mentah dari database: " + ex.Message;
+                errorMessage = "Gagal memuat data Audio dari database: " + ex.Message;
                 Console.WriteLine("❌ ERROR di LoadRawDataForDateRange(): " + ex.ToString());
             }
         }
 
+        public decimal GetDailyPlanForLine(string machineCode)
+        {
+            var dp = DailyPlanData.FirstOrDefault(p => p.MachineCode == machineCode)?.Quantity ?? 0;
+            if (dp > 0) return dp;
+            var row = RawOeeData.Where(d => d.MachineCode == machineCode).OrderByDescending(d => d.SDate).FirstOrDefault();
+            return row != null ? row.DailyPlan : 0;
+        }
 
-        // --- Metode Perhitungan ---
+        private void CalculateAllSummaries()
+        {
+            Shift1Summaries.Clear();
+            Shift2Summaries.Clear();
+            Shift3Summaries.Clear();
+            OverallSummaries.Clear();
 
-        public List<RestTime> GetRestTime(string dayTipe) => RawRestTimeData.Where(r => r.DayType == dayTipe).Select(r => new RestTime { StartTime = r.StartTime, EndTime = r.EndTime }).ToList();
-        public List<ActualQty> GetActualData(TimeSpan startTime, TimeSpan endTime) => RawOeeData.Where(d => d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime).GroupBy(d => d.MachineCode).Select(g => new ActualQty { MachineCode = g.Key, Quantity = g.Count() }).ToList();
+            // Inisialisasi struktur per lini untuk setiap shift
+            var shift1Map = AudioLineCodes.ToDictionary(c => c, c => new ShiftLineSummary
+            {
+                ShiftNumber = 1,
+                MachineCode = c,
+                LineName = AudioLineNames.ContainsKey(c) ? AudioLineNames[c] : c,
+                DailyPlan = (long)GetDailyPlanForLine(c)
+            });
+
+            var shift2Map = AudioLineCodes.ToDictionary(c => c, c => new ShiftLineSummary
+            {
+                ShiftNumber = 2,
+                MachineCode = c,
+                LineName = AudioLineNames.ContainsKey(c) ? AudioLineNames[c] : c,
+                DailyPlan = (long)GetDailyPlanForLine(c)
+            });
+
+            var shift3Map = AudioLineCodes.ToDictionary(c => c, c => new ShiftLineSummary
+            {
+                ShiftNumber = 3,
+                MachineCode = c,
+                LineName = AudioLineNames.ContainsKey(c) ? AudioLineNames[c] : c,
+                DailyPlan = (long)GetDailyPlanForLine(c)
+            });
+
+            var overallMap = AudioLineCodes.ToDictionary(c => c, c => new OverallLineSummary
+            {
+                MachineCode = c,
+                LineName = AudioLineNames.ContainsKey(c) ? AudioLineNames[c] : c,
+                DailyPlan = (long)GetDailyPlanForLine(c)
+            });
+
+            var StartWorkingTimeShift_01 = new TimeSpan(7, 5, 0);
+            var EndWorkingTimeShift_01 = new TimeSpan(15, 55, 0);
+
+            var StartWorkingTimeShift_02 = new TimeSpan(16, 0, 0);
+            var EndWorkingTimeShift_02 = new TimeSpan(23, 15, 0);
+
+            var StartWorkingTimeShift_03 = new TimeSpan(23, 15, 0);
+            var EndWorkingTimeShift_03 = new TimeSpan(7, 0, 0);
+
+            for (var day = StartSelectedDate.Date; day <= EndSelectedDate.Date; day = day.AddDays(1))
+            {
+                var dayType = DetermineTypeOfDay(day.DayOfWeek);
+                if (dayType == "WEEKEND") continue;
+
+                var listRest = GetRestTime(dayType);
+
+                // --- SHIFT 1 ---
+                var s1Start = day + StartWorkingTimeShift_01;
+                var s1End = day + EndWorkingTimeShift_01;
+                var s1PlanData = GetPlanFromTargetUnit(s1Start, s1End);
+                var s1ActData = GetActualData(s1Start, s1End);
+                var s1DefData = GetTotalDefect(s1Start, s1End);
+                var s1Elapsed = CalculateSingleDayElapsedWorkingTime(day, StartWorkingTimeShift_01, EndWorkingTimeShift_01, listRest);
+
+                // --- SHIFT 2 ---
+                var s2Start = day + StartWorkingTimeShift_02;
+                var s2End = day + EndWorkingTimeShift_02;
+                var s2PlanData = GetPlanFromTargetUnit(s2Start, s2End);
+                var s2ActData = GetActualData(s2Start, s2End);
+                var s2DefData = GetTotalDefect(s2Start, s2End);
+                var s2Elapsed = CalculateSingleDayElapsedWorkingTime(day, StartWorkingTimeShift_02, EndWorkingTimeShift_02, listRest);
+
+                // --- SHIFT 3 ---
+                var s3Start = day + StartWorkingTimeShift_03;
+                var s3End = day.AddDays(1) + EndWorkingTimeShift_03;
+                var s3PlanData = GetPlanFromTargetUnit(s3Start, s3End);
+                var s3ActData = GetActualData(s3Start, s3End);
+                var s3DefData = GetTotalDefect(s3Start, s3End);
+                var s3Elapsed = CalculateOvernightShiftElapsedWorkingTime(day, StartWorkingTimeShift_03, EndWorkingTimeShift_03, listRest);
+
+                foreach (var code in AudioLineCodes)
+                {
+                    // Accumulate Shift 1
+                    var s1Item = shift1Map[code];
+                    var p1 = (long)(s1PlanData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var a1 = (long)(s1ActData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var d1 = (long)(s1DefData.FirstOrDefault(x => x.MachineCode == code)?.DefectQty ?? 0);
+                    var l1 = CalculateTotalLossTime(code, s1Start, s1End, listRest);
+                    var mc1 = GetTotalChangeModel(code, s1Start, s1End);
+                    var mModels1 = GetStartEndModel(code, s1Start, s1End);
+                    var mt1 = mModels1.Count > 1 ? mModels1.Zip(mModels1.Skip(1), (p, n) => (n.StartTime - p.EndTime).TotalMinutes).Sum() : 0.0;
+
+                    s1Item.Plan += p1;
+                    s1Item.Actual += a1;
+                    s1Item.DefectQty += d1;
+                    s1Item.LossTimeMinutes += l1;
+                    s1Item.WorkTimeMinutes += (a1 > 0 || p1 > 0 ? s1Elapsed : (s1Elapsed > 0 && RawOeeData.Any(d => d.MachineCode == code && d.SDate >= s1Start && d.SDate < s1End) ? s1Elapsed : 0));
+                    s1Item.ModelChanges += mc1;
+                    s1Item.ModelTimeChange += mt1;
+                    if (mModels1.Any() && s1Item.ModelStartTime == null) s1Item.ModelStartTime = mModels1.First().StartTime;
+                    if (mModels1.Any()) s1Item.ModelEndTime = mModels1.Last().EndTime;
+
+                    // Accumulate Shift 2
+                    var s2Item = shift2Map[code];
+                    var p2 = (long)(s2PlanData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var a2 = (long)(s2ActData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var d2 = (long)(s2DefData.FirstOrDefault(x => x.MachineCode == code)?.DefectQty ?? 0);
+                    var l2 = CalculateTotalLossTime(code, s2Start, s2End, listRest);
+                    var mc2 = GetTotalChangeModel(code, s2Start, s2End);
+                    var mModels2 = GetStartEndModel(code, s2Start, s2End);
+                    var mt2 = mModels2.Count > 1 ? mModels2.Zip(mModels2.Skip(1), (p, n) => (n.StartTime - p.EndTime).TotalMinutes).Sum() : 0.0;
+
+                    s2Item.Plan += p2;
+                    s2Item.Actual += a2;
+                    s2Item.DefectQty += d2;
+                    s2Item.LossTimeMinutes += l2;
+                    s2Item.WorkTimeMinutes += (a2 > 0 || p2 > 0 ? s2Elapsed : (s2Elapsed > 0 && RawOeeData.Any(d => d.MachineCode == code && d.SDate >= s2Start && d.SDate < s2End) ? s2Elapsed : 0));
+                    s2Item.ModelChanges += mc2;
+                    s2Item.ModelTimeChange += mt2;
+                    if (mModels2.Any() && s2Item.ModelStartTime == null) s2Item.ModelStartTime = mModels2.First().StartTime;
+                    if (mModels2.Any()) s2Item.ModelEndTime = mModels2.Last().EndTime;
+
+                    // Accumulate Shift 3
+                    var s3Item = shift3Map[code];
+                    var p3 = (long)(s3PlanData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var a3 = (long)(s3ActData.FirstOrDefault(x => x.MachineCode == code)?.Quantity ?? 0);
+                    var d3 = (long)(s3DefData.FirstOrDefault(x => x.MachineCode == code)?.DefectQty ?? 0);
+                    var l3 = CalculateTotalLossTime(code, s3Start, s3End, listRest);
+                    var mc3 = GetTotalChangeModel(code, s3Start, s3End);
+                    var mModels3 = GetStartEndModel(code, s3Start, s3End);
+                    var mt3 = mModels3.Count > 1 ? mModels3.Zip(mModels3.Skip(1), (p, n) => (n.StartTime - p.EndTime).TotalMinutes).Sum() : 0.0;
+
+                    s3Item.Plan += p3;
+                    s3Item.Actual += a3;
+                    s3Item.DefectQty += d3;
+                    s3Item.LossTimeMinutes += l3;
+                    s3Item.WorkTimeMinutes += (a3 > 0 || p3 > 0 ? s3Elapsed : (s3Elapsed > 0 && RawOeeData.Any(d => d.MachineCode == code && d.SDate >= s3Start && d.SDate < s3End) ? s3Elapsed : 0));
+                    s3Item.ModelChanges += mc3;
+                    s3Item.ModelTimeChange += mt3;
+                    if (mModels3.Any() && s3Item.ModelStartTime == null) s3Item.ModelStartTime = mModels3.First().StartTime;
+                    if (mModels3.Any()) s3Item.ModelEndTime = mModels3.Last().EndTime;
+                }
+            }
+
+            // Hitung PPH untuk tiap lini pada tiap shift
+            foreach (var code in AudioLineCodes)
+            {
+                var workers = GetAverageWorkersForPeriod(code, StartSelectedDate, EndSelectedDate.AddDays(1));
+                if (workers <= 0) workers = 25;
+
+                // Shift 1 PPH
+                var s1 = shift1Map[code];
+                var netMin1 = s1.WorkTimeMinutes - s1.LossTimeMinutes;
+                var netHr1 = netMin1 > 0 ? netMin1 / 60.0 : 0.0;
+                if (s1.Actual > 0 && workers > 0 && netHr1 > 0)
+                    s1.Pph = Math.Round(s1.Actual / (double)workers / netHr1, 2);
+
+                // Shift 2 PPH
+                var s2 = shift2Map[code];
+                var netMin2 = s2.WorkTimeMinutes - s2.LossTimeMinutes;
+                var netHr2 = netMin2 > 0 ? netMin2 / 60.0 : 0.0;
+                if (s2.Actual > 0 && workers > 0 && netHr2 > 0)
+                    s2.Pph = Math.Round(s2.Actual / (double)workers / netHr2, 2);
+
+                // Shift 3 PPH
+                var s3 = shift3Map[code];
+                var netMin3 = s3.WorkTimeMinutes - s3.LossTimeMinutes;
+                var netHr3 = netMin3 > 0 ? netMin3 / 60.0 : 0.0;
+                if (s3.Actual > 0 && workers > 0 && netHr3 > 0)
+                    s3.Pph = Math.Round(s3.Actual / (double)workers / netHr3, 2);
+
+                // Overall Accumulation
+                var ov = overallMap[code];
+                ov.Plan = s1.Plan + s2.Plan + s3.Plan;
+                ov.Actual = s1.Actual + s2.Actual + s3.Actual;
+                ov.DefectQty = s1.DefectQty + s2.DefectQty + s3.DefectQty;
+                ov.LossTimeMinutes = s1.LossTimeMinutes + s2.LossTimeMinutes + s3.LossTimeMinutes;
+                ov.WorkTimeMinutes = s1.WorkTimeMinutes + s2.WorkTimeMinutes + s3.WorkTimeMinutes;
+                ov.ModelChanges = s1.ModelChanges + s2.ModelChanges + s3.ModelChanges;
+                ov.ModelTimeChange = s1.ModelTimeChange + s2.ModelTimeChange + s3.ModelTimeChange;
+            }
+
+            Shift1Summaries = shift1Map.Values.ToList();
+            Shift2Summaries = shift2Map.Values.ToList();
+            Shift3Summaries = shift3Map.Values.ToList();
+            OverallSummaries = overallMap.Values.ToList();
+        }
+
+        // --- Metode Perhitungan & Helper (Tetap Disediakan) ---
+        public List<RestTime> GetRestTime(string dayTipe) => 
+            RawRestTimeData.Where(r => r.DayType == dayTipe).Select(r => new RestTime { StartTime = r.StartTime, EndTime = r.EndTime }).ToList();
+
+        public List<ActualQty> GetActualData(DateTime startTime, DateTime endTime) =>
+            RawOeeData
+                .Where(d => d.SDate >= startTime && d.SDate < endTime)
+                .GroupBy(d => d.MachineCode)
+                .Select(g => {
+                    int max = g.Max(d => d.Actual);
+                    int min = g.Min(d => d.Actual);
+                    int qty = (max > min) ? (max - (min > 0 ? min - 1 : 0)) : (max > 0 ? max : g.Count());
+                    return new ActualQty { MachineCode = g.Key, Quantity = qty };
+                })
+                .ToList();
+
+        public List<ActualQty> GetActualData(TimeSpan startTime, TimeSpan endTime) =>
+            RawOeeData
+                .Where(d => d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime)
+                .GroupBy(d => d.MachineCode)
+                .Select(g => {
+                    int max = g.Max(d => d.Actual);
+                    int min = g.Min(d => d.Actual);
+                    int qty = (max > min) ? (max - (min > 0 ? min - 1 : 0)) : (max > 0 ? max : g.Count());
+                    return new ActualQty { MachineCode = g.Key, Quantity = qty };
+                })
+                .ToList();
+
         public List<PlanQty> GetPlanFromTargetUnit(DateTime startTime, DateTime endTime)
         {
             return RawOeeData
@@ -215,72 +552,21 @@ namespace MonitoringSystem.Pages.Summary
                 .GroupBy(d => d.MachineCode)
                 .Select(g =>
                 {
-                    var latest = g.OrderByDescending(d => d.SDate).FirstOrDefault();
+                    var maxTarget = g.Max(d => d.TargetUnit);
+                    var minTarget = g.Min(d => d.TargetUnit);
+                    decimal qty = (maxTarget > minTarget) ? (maxTarget - (minTarget > 0 ? minTarget - 1 : 0)) : (maxTarget > 0 ? maxTarget : 0);
+                    if (qty == 0)
+                    {
+                        qty = g.Max(d => d.DailyPlan);
+                    }
                     return new PlanQty
                     {
                         MachineCode = g.Key,
-                        Quantity = latest?.TargetUnit ?? 0 // Ambil nilai TargetUnit terbaru
+                        Quantity = qty
                     };
                 })
                 .ToList();
         }
-
-
-        public List<SUTModel> GetSUTModel(TimeSpan startTime, TimeSpan endTime) => RawOeeData.Where(d => d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime).OrderByDescending(d => d.SDate).GroupBy(d => d.MachineCode).Select(g => new SUTModel { MachineCode = g.Key, SUT = g.First().SUT }).ToList();
-        public List<TotalDefect> GetTotalDefect(TimeSpan startTime, TimeSpan endTime) => RawNgData.Where(d => d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime).GroupBy(d => d.MachineCode).Select(g => new TotalDefect { MachineCode = g.Key, DefectQty = g.Count() }).ToList();
-        public int GetTotalChangeModel(string machineCode, TimeSpan startTime, TimeSpan endTime) => RawOeeData.Where(d => d.MachineCode == machineCode && d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime).Select(d => d.ProductName).Distinct().Count();
-
-        // PENAMBAHAN BARU: Metode untuk menghitung Loss Time dari data mentah
-        public int CalculateTotalLossTime(string machineCode, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> breaks)
-        {
-            var totalLossSeconds = RawLossTimeData
-                .Where(lt =>
-                    lt.MachineCode == machineCode &&
-                    lt.StartTime >= shiftStart &&
-                    lt.EndTime < shiftEnd &&
-                    !breaks.Any(b => lt.StartTime < b.EndTime && lt.EndTime > b.StartTime) // Cek tidak tumpang tindih dengan istirahat
-                )
-                .Sum(lt => (lt.EndTime - lt.StartTime).TotalSeconds);
-
-            return (int)totalLossSeconds / 60; // Kembalikan dalam menit
-        }
-
-        public List<DailyPlanQty> GetDailyPlanData(DateTime startTime, DateTime endTime)
-        {
-            return DailyPlanData
-                .Where(d => d != null)
-                .GroupBy(d => d.MachineCode)
-                .Select(g => new DailyPlanQty
-                {
-                    MachineCode = g.Key,
-                    Quantity = g.Sum(x => x.Quantity)
-                })
-                .ToList();
-        }
-
-        // --- Metode Helper ---
-        public string DetermineTypeOfDay(DayOfWeek day) => day switch { DayOfWeek.Friday => "FRIDAY", DayOfWeek.Saturday or DayOfWeek.Sunday => "WEEKEND", _ => "REGULAR" };
-        public int GetTotalRestTime(List<RestTime> listRestTime, TimeSpan StartTime, TimeSpan EndTime, TimeSpan CurrentTime)
-        {
-            int totalRestMinutes = 0;
-            TimeSpan effectiveCurrentTime = (StartSelectedDate.Date == DateTime.Today) ? CurrentTime : EndTime;
-            foreach (var rest in listRestTime)
-            {
-                var overlapStart = new TimeSpan(Math.Max(StartTime.Ticks, rest.StartTime.Ticks));
-                var overlapEnd = new TimeSpan(Math.Min(effectiveCurrentTime.Ticks, rest.EndTime.Ticks));
-                if (overlapEnd > overlapStart) totalRestMinutes += (int)(overlapEnd - overlapStart).TotalMinutes;
-            }
-            return totalRestMinutes;
-        }
-
-        // Metode ini akan menangani rentang waktu yang melewati tengah malam
-
-        public List<ActualQty> GetActualData(DateTime startTime, DateTime endTime) =>
-            RawOeeData
-                .Where(d => d.SDate >= startTime && d.SDate < endTime)
-                .GroupBy(d => d.MachineCode)
-                .Select(g => new ActualQty { MachineCode = g.Key, Quantity = g.Count() })
-                .ToList();
 
         public List<TotalDefect> GetTotalDefect(DateTime startTime, DateTime endTime) =>
             RawNgData
@@ -289,40 +575,23 @@ namespace MonitoringSystem.Pages.Summary
                 .Select(g => new TotalDefect { MachineCode = g.Key, DefectQty = g.Count() })
                 .ToList();
 
-        public int CalculateTotalLossTime(string machineCode, DateTime shiftStart, DateTime shiftEnd, List<RestTime> breaks)
-        {
-            var totalLossSeconds = RawLossTimeData
-                .Where(lt =>
-                {
-                    // Buat DateTime lengkap untuk setiap loss event
-                    var lossStart = lt.Date.Date + lt.StartTime;
-                    var lossEnd = lt.Date.Date + lt.EndTime;
-                    // Jika loss melewati tengah malam, tambahkan satu hari ke waktu akhir
-                    if (lossEnd < lossStart) lossEnd = lossEnd.AddDays(1);
-
-                    return lt.MachineCode == machineCode &&
-                           lossStart >= shiftStart &&
-                           lossEnd < shiftEnd &&
-                           !breaks.Any(b => {
-                               var breakStart = shiftStart.Date + b.StartTime;
-                               var breakEnd = shiftStart.Date + b.EndTime;
-                               if (b.StartTime > b.EndTime) breakEnd = breakEnd.AddDays(1); // Handle istirahat lintas hari jika ada
-                               return lossStart < breakEnd && lossEnd > breakStart;
-                           });
-                })
-                .Sum(lt => {
-                    var lossEnd = lt.Date.Date + lt.EndTime;
-                    if (lossEnd < (lt.Date.Date + lt.StartTime)) lossEnd = lossEnd.AddDays(1);
-                    return (lossEnd - (lt.Date.Date + lt.StartTime)).TotalSeconds;
-                });
-
-            return (int)totalLossSeconds / 60; // Kembalikan dalam menit
-        }
-
+        public List<TotalDefect> GetTotalDefect(TimeSpan startTime, TimeSpan endTime) =>
+            RawNgData
+                .Where(d => d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime)
+                .GroupBy(d => d.MachineCode)
+                .Select(g => new TotalDefect { MachineCode = g.Key, DefectQty = g.Count() })
+                .ToList();
 
         public int GetTotalChangeModel(string machineCode, DateTime startTime, DateTime endTime) =>
             RawOeeData
                 .Where(d => d.MachineCode == machineCode && d.SDate >= startTime && d.SDate < endTime)
+                .Select(d => d.ProductName)
+                .Distinct()
+                .Count();
+
+        public int GetTotalChangeModel(string machineCode, TimeSpan startTime, TimeSpan endTime) =>
+            RawOeeData
+                .Where(d => d.MachineCode == machineCode && d.SDate.TimeOfDay >= startTime && d.SDate.TimeOfDay < endTime)
                 .Select(d => d.ProductName)
                 .Distinct()
                 .Count();
@@ -354,56 +623,6 @@ namespace MonitoringSystem.Pages.Summary
             return results;
         }
 
-        public int CalculateTotalWorkingTimeForRange(TimeSpan shiftStart, TimeSpan shiftEnd)
-        {
-            double totalMinutes = 0;
-
-            // Loop untuk setiap hari dalam rentang tanggal yang dipilih
-            for (var day = StartSelectedDate.Date; day <= EndSelectedDate.Date; day = day.AddDays(1))
-            {
-                var dayType = DetermineTypeOfDay(day.DayOfWeek);
-
-                // Lewati hari libur (misal: Weekend)
-                if (dayType == "WEEKEND")
-                {
-                    continue;
-                }
-
-                // Ambil jadwal istirahat untuk tipe hari ini
-                var breaksForDay = RawRestTimeData
-                    .Where(r => r.DayType == dayType)
-                    .ToList();
-
-                double shiftDurationMinutes = (shiftEnd - shiftStart).TotalMinutes;
-                double restMinutesForDay = 0;
-
-                foreach (var rest in breaksForDay)
-                {
-                    // Hitung durasi istirahat yang berada dalam jam kerja shift
-                    var overlapStart = new TimeSpan(Math.Max(shiftStart.Ticks, rest.StartTime.Ticks));
-                    var overlapEnd = new TimeSpan(Math.Min(shiftEnd.Ticks, rest.EndTime.Ticks));
-                    if (overlapEnd > overlapStart)
-                    {
-                        restMinutesForDay += (overlapEnd - overlapStart).TotalMinutes;
-                    }
-                }
-
-                // Tambahkan waktu kerja bersih hari ini ke total
-                totalMinutes += (shiftDurationMinutes - restMinutesForDay);
-            }
-
-            // Logika untuk hari ini (jika rentang mencakup hari ini, maka waktu kerja dihitung sampai jam saat ini)
-            if (EndSelectedDate.Date == DateTime.Today && StartSelectedDate.Date == DateTime.Today)
-            {
-                var workingDurationToday = (DateTime.Now.TimeOfDay > shiftStart ? (DateTime.Now.TimeOfDay < shiftEnd ? DateTime.Now.TimeOfDay - shiftStart : shiftEnd - shiftStart) : TimeSpan.Zero);
-                var totalRestTimeToday = GetTotalRestTime(GetRestTime(DetermineTypeOfDay(DateTime.Today.DayOfWeek)), shiftStart, shiftEnd, DateTime.Now.TimeOfDay);
-                return Math.Max(0, (int)workingDurationToday.TotalMinutes - totalRestTimeToday);
-            }
-
-
-            return (int)totalMinutes;
-        }
-
         public List<StartEndModel> GetStartEndModel(string machineCode, TimeSpan startTime, TimeSpan endTime)
         {
             var results = new List<StartEndModel>();
@@ -418,6 +637,114 @@ namespace MonitoringSystem.Pages.Summary
             results.Add(currentBlock);
             return results;
         }
+
+        public int CalculateTotalLossTime(string machineCode, DateTime shiftStart, DateTime shiftEnd, List<RestTime> breaks)
+        {
+            var totalLossSeconds = RawLossTimeData
+                .Where(lt =>
+                {
+                    var lossStart = lt.Date.Date + lt.StartTime;
+                    var lossEnd = lt.Date.Date + lt.EndTime;
+                    if (lossEnd < lossStart) lossEnd = lossEnd.AddDays(1);
+
+                    return lt.MachineCode == machineCode &&
+                           lossStart >= shiftStart &&
+                           lossEnd < shiftEnd &&
+                           !breaks.Any(b => {
+                               var breakStart = shiftStart.Date + b.StartTime;
+                               var breakEnd = shiftStart.Date + b.EndTime;
+                               if (b.StartTime > b.EndTime) breakEnd = breakEnd.AddDays(1);
+                               return lossStart < breakEnd && lossEnd > breakStart;
+                           });
+                })
+                .Sum(lt => {
+                    var lossEnd = lt.Date.Date + lt.EndTime;
+                    if (lossEnd < (lt.Date.Date + lt.StartTime)) lossEnd = lossEnd.AddDays(1);
+                    return (lossEnd - (lt.Date.Date + lt.StartTime)).TotalSeconds;
+                });
+
+            return (int)totalLossSeconds / 60;
+        }
+
+        public int CalculateTotalLossTime(string machineCode, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> breaks)
+        {
+            var totalLossSeconds = RawLossTimeData
+                .Where(lt =>
+                    lt.MachineCode == machineCode &&
+                    lt.StartTime >= shiftStart &&
+                    lt.EndTime < shiftEnd &&
+                    !breaks.Any(b => lt.StartTime < b.EndTime && lt.EndTime > b.StartTime)
+                )
+                .Sum(lt => (lt.EndTime - lt.StartTime).TotalSeconds);
+
+            return (int)totalLossSeconds / 60;
+        }
+
+        public string DetermineTypeOfDay(DayOfWeek day) => day switch { DayOfWeek.Friday => "FRIDAY", DayOfWeek.Saturday or DayOfWeek.Sunday => "WEEKEND", _ => "REGULAR" };
+
+        public int GetTotalRestTime(List<RestTime> listRestTime, TimeSpan StartTime, TimeSpan EndTime, TimeSpan CurrentTime)
+        {
+            int totalRestMinutes = 0;
+            TimeSpan effectiveCurrentTime = (StartSelectedDate.Date == DateTime.Today) ? CurrentTime : EndTime;
+            foreach (var rest in listRestTime)
+            {
+                var overlapStart = new TimeSpan(Math.Max(StartTime.Ticks, rest.StartTime.Ticks));
+                var overlapEnd = new TimeSpan(Math.Min(effectiveCurrentTime.Ticks, rest.EndTime.Ticks));
+                if (overlapEnd > overlapStart) totalRestMinutes += (int)(overlapEnd - overlapStart).TotalMinutes;
+            }
+            return totalRestMinutes;
+        }
+
+        public double CalculateSingleDayElapsedWorkingTime(DateTime day, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> shiftBreaks)
+        {
+            var now = DateTime.Now;
+
+            if (day.Date > now.Date) return 0;
+
+            if (day.Date < now.Date)
+            {
+                double totalShiftMinutes = (shiftEnd - shiftStart).TotalMinutes;
+                double actualBreakMinutesInShift = 0;
+
+                foreach (var rest in shiftBreaks)
+                {
+                    var overlapStart = new TimeSpan(Math.Max(shiftStart.Ticks, rest.StartTime.Ticks));
+                    var overlapEnd = new TimeSpan(Math.Min(shiftEnd.Ticks, rest.EndTime.Ticks));
+                    if (overlapEnd > overlapStart)
+                    {
+                        actualBreakMinutesInShift += (overlapEnd - overlapStart).TotalMinutes;
+                    }
+                }
+                return Math.Max(0, totalShiftMinutes - actualBreakMinutesInShift);
+            }
+
+            TimeSpan effectiveEndTime = (now.TimeOfDay > shiftEnd) ? shiftEnd : now.TimeOfDay;
+            if (effectiveEndTime <= shiftStart) return 0;
+
+            double grossDurationMinutes = (effectiveEndTime - shiftStart).TotalMinutes;
+            int restMinutesElapsed = GetTotalRestTime(shiftBreaks, shiftStart, shiftEnd, now.TimeOfDay);
+
+            return Math.Max(0, grossDurationMinutes - restMinutesElapsed);
+        }
+
+        public double CalculateOvernightShiftElapsedWorkingTime(DateTime startDay, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> shiftBreaks)
+        {
+            var now = DateTime.Now;
+            var shiftStartDateTime = startDay.Date + shiftStart;
+            var shiftEndDateTime = startDay.Date.AddDays(1) + shiftEnd;
+
+            if (now < shiftStartDateTime) return 0;
+
+            if (now >= shiftEndDateTime)
+            {
+                double totalShiftMinutes = (shiftEndDateTime - shiftStartDateTime).TotalMinutes;
+                return totalShiftMinutes;
+            }
+
+            double grossDurationMinutes = (now - shiftStartDateTime).TotalMinutes;
+            return Math.Max(0, grossDurationMinutes);
+        }
+
         public int GetAverageWorkersForPeriod(string machineCode, DateTime startTime, DateTime endTime)
         {
             var workersPerDay = RawOeeData
@@ -426,110 +753,31 @@ namespace MonitoringSystem.Pages.Summary
                 .Select(g => g.Max(d => d.NoOfOperator)) 
                 .ToList();
 
-            if (workersPerDay.Any())
+            if (workersPerDay.Any(w => w > 0))
             {
-                return (int)Math.Round(workersPerDay.Average());
+                return (int)Math.Round(workersPerDay.Where(w => w > 0).Average());
             }
-            return 0;
+            return 25; // Default standar operator perakitan Audio
         }
 
-        // Tambahkan metode baru ini di dalam kelas SummaryModel
-        public double CalculateSingleDayElapsedWorkingTime(DateTime day, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> shiftBreaks)
+        public List<DailyPlanQty> GetDailyPlanData(DateTime startTime, DateTime endTime)
         {
-            var now = DateTime.Now;
-
-            // Jika hari yang diproses adalah di masa depan, waktu kerja adalah 0
-            if (day.Date > now.Date)
-            {
-                return 0;
-            }
-
-            // Jika hari yang diproses adalah di masa lalu, hitung waktu kerja bersih satu shift penuh
-            // BLOK BARU YANG SUDAH DIPERBAIKI
-            if (day.Date < now.Date)
-            {
-                double totalShiftMinutes = (shiftEnd - shiftStart).TotalMinutes;
-                double actualBreakMinutesInShift = 0;
-
-                // Loop melalui setiap jadwal istirahat yang ada untuk hari itu
-                foreach (var rest in shiftBreaks)
+            return DailyPlanData
+                .Where(d => d != null)
+                .GroupBy(d => d.MachineCode)
+                .Select(g => new DailyPlanQty
                 {
-                    // Tentukan waktu mulai dan akhir dari tumpang tindih (overlap) antara jam kerja dan jam istirahat
-                    var overlapStart = new TimeSpan(Math.Max(shiftStart.Ticks, rest.StartTime.Ticks));
-                    var overlapEnd = new TimeSpan(Math.Min(shiftEnd.Ticks, rest.EndTime.Ticks));
-
-                    // Jika ada tumpang tindih yang valid (waktu akhir > waktu mulai)
-                    if (overlapEnd > overlapStart)
-                    {
-                        // Tambahkan durasi tumpang tindih tersebut ke total istirahat yang valid
-                        actualBreakMinutesInShift += (overlapEnd - overlapStart).TotalMinutes;
-                    }
-                }
-                return totalShiftMinutes - actualBreakMinutesInShift;
-            }
-
-            // Jika hari yang diproses adalah HARI INI, hitung secara dinamis
-            // Waktu efektif berakhir adalah waktu saat ini, kecuali jika shift sudah selesai
-            TimeSpan effectiveEndTime = (now.TimeOfDay > shiftEnd) ? shiftEnd : now.TimeOfDay;
-
-            // Jika shift belum dimulai, waktu kerja adalah 0
-            if (effectiveEndTime <= shiftStart)
-            {
-                return 0;
-            }
-
-            // Hitung durasi kotor dari awal shift hingga waktu efektif berakhir
-            double grossDurationMinutes = (effectiveEndTime - shiftStart).TotalMinutes;
-
-            // Hitung total istirahat yang sudah terjadi dalam durasi tersebut
-            int restMinutesElapsed = GetTotalRestTime(shiftBreaks, shiftStart, shiftEnd, now.TimeOfDay);
-
-            return Math.Max(0, grossDurationMinutes - restMinutesElapsed);
+                    MachineCode = g.Key,
+                    Quantity = g.Sum(x => x.Quantity)
+                })
+                .ToList();
         }
 
-        // Tambahkan metode baru ini di dalam kelas SummaryModel
-
-        public double CalculateOvernightShiftElapsedWorkingTime(DateTime startDay, TimeSpan shiftStart, TimeSpan shiftEnd, List<RestTime> shiftBreaks)
-        {
-            var now = DateTime.Now;
-
-            // Tentukan waktu mulai dan selesai shift secara penuh (start di hari ini, end di hari besok)
-            var shiftStartDateTime = startDay.Date + shiftStart;
-            var shiftEndDateTime = startDay.Date.AddDays(1) + shiftEnd;
-
-            // 1. Jika shift di masa depan (waktu sekarang masih sebelum shift dimulai)
-            if (now < shiftStartDateTime)
-            {
-                return 0;
-            }
-
-            // 2. Jika shift sudah sepenuhnya berlalu (waktu sekarang sudah melewati akhir shift)
-            if (now >= shiftEndDateTime)
-            {
-                double totalShiftMinutes = (shiftEndDateTime - shiftStartDateTime).TotalMinutes;
-                // Asumsi jam istirahat untuk shift malam tidak ada atau sudah termasuk dalam kalkulasi total.
-                // Jika ada, perlu penanganan khusus. Untuk saat ini, kita anggap total durasi.
-                double totalBreakMinutes = 0; // Sesuaikan jika ada jadwal istirahat tetap untuk shift 3
-                return totalShiftMinutes - totalBreakMinutes;
-            }
-
-            // 3. Jika shift sedang berjalan (waktu sekarang ada di antara mulai dan selesai shift)
-            // Durasi kotor dari awal shift hingga saat ini
-            double grossDurationMinutes = (now - shiftStartDateTime).TotalMinutes;
-
-            // Hitung istirahat yang sudah terjadi (jika ada)
-            // NOTE: Metode GetTotalRestTime yang ada mungkin perlu penyesuaian untuk shift malam.
-            // Untuk saat ini kita asumsikan 0 untuk penyederhanaan.
-            int restMinutesElapsed = 0;
-
-            return Math.Max(0, grossDurationMinutes - restMinutesElapsed);
-        }
-
-        public class PlanQty { public decimal Quantity { get; set; } public string MachineCode { get; set; } }
-        public class ActualQty { public int Quantity { get; set; } public string MachineCode { get; set; } }
-        public class SUTModel { public int SUT { get; set; } public string MachineCode { get; set; } }
+        public class PlanQty { public decimal Quantity { get; set; } public string MachineCode { get; set; } = ""; }
+        public class ActualQty { public int Quantity { get; set; } public string MachineCode { get; set; } = ""; }
+        public class SUTModel { public int SUT { get; set; } public string MachineCode { get; set; } = ""; }
         public class RestTime { public TimeSpan StartTime { get; set; } public TimeSpan EndTime { get; set; } }
-        public class TotalDefect { public string MachineCode { get; set; } public int DefectQty { get; set; } }
-        public class StartEndModel { public string Model { get; set; } public DateTime StartTime { get; set; } public DateTime EndTime { get; set; } }
+        public class TotalDefect { public string MachineCode { get; set; } = ""; public int DefectQty { get; set; } }
+        public class StartEndModel { public string Model { get; set; } = ""; public DateTime StartTime { get; set; } public DateTime EndTime { get; set; } }
     }
 }

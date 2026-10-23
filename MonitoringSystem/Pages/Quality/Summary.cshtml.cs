@@ -7,7 +7,9 @@ namespace MonitoringSystem.Pages.Quality
 {
     public class SummaryModel : PageModel
     {
-        public string connectionString = "Server=10.83.33.103;User Id=sa;Password=sa;Database=PROMOSYS;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
+        // Production Server AC (hanya di jaringan internal perusahaan):
+        // public string connectionString = "Server=localhost;User Id=sa;Password=sa;Database=AUDIO_PRODUCTION;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
+        public string connectionString = "Server=localhost\\SQLEXPRESS;Database=AUDIO_PRODUCTION;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=True";
 
         // Sub-kolom per bulan. Qty = semua defect, Quality = disposisi Change Product/Dispose,
         // Report = sudah dikonfirmasi leader, Mfg/Repair = disposisi Repair.
@@ -19,12 +21,24 @@ namespace MonitoringSystem.Pages.Quality
         [BindProperty(SupportsGet = true)]
         public int? Fy { get; set; }
 
-        public QualityDefectCatalog.LineDefinition LineDef { get; private set; } = QualityDefectCatalog.CU;
+        public QualityDefectCatalog.LineDefinition LineDef { get; private set; } = QualityDefectCatalog.Final1;
         public int FiscalYear { get; private set; }
         public List<DateTime> Months { get; private set; } = new();
         public List<StationBlock> Stations { get; private set; } = new();
         public MonthCell[] GrandTotal { get; private set; } = Array.Empty<MonthCell>();
         public string errorMessage = "";
+
+        private readonly IConfiguration? _configuration;
+
+        public SummaryModel(IConfiguration? configuration = null)
+        {
+            _configuration = configuration;
+            if (_configuration != null)
+            {
+                var conn = _configuration.GetConnectionString("DefaultConnection");
+                if (!string.IsNullOrEmpty(conn)) connectionString = conn;
+            }
+        }
 
         public void OnGet()
         {

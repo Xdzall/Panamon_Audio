@@ -12,8 +12,7 @@ namespace MonitoringSystem.Pages
 {
     public class IndexModel : PageModel
     {
-        //public string connectionString = "Server=localhost\\SQLEXPRESS01;Database=PROMOSYS;Trusted_Connection=True;TrustServerCertificate=True;";
-        private readonly string connectionString = "Data Source=DESKTOP-NBPATD6\\MSSQLSERVERR;trusted_connection=true;trustservercertificate=True;Database=LatestPROMOSYS;Integrated Security=True;Encrypt=False";
+        private readonly string connectionString;
         private readonly ILogger<IndexModel> _logger;
         private readonly IConfiguration _configuration;
         private bool IsValidInput(int month, int year) => month >= 1 && month <= 12 && year > 0;
@@ -28,14 +27,13 @@ namespace MonitoringSystem.Pages
         {
             _logger = logger;
             _configuration = configuration;
+            connectionString = _configuration.GetConnectionString("DefaultConnection") ?? "";
         }
 
-        // Halaman pilihan RAC / CAC / MACHINE (juga tujuan default setelah login)
+        // Tujuan default setelah login / root URL: masuk ke navigasi utama Panamon Audio
         public IActionResult OnGet()
         {
-            if (!_configuration.GetValue("Landing:ShowModuleChooser", ShowModuleChooserDefault))
-                return Redirect(TemporaryLandingPage);
-            return Page();
+            return Redirect("/ProductionReport/index");
         }
 
         public IActionResult OnPostExportToExcel(int month, int year)

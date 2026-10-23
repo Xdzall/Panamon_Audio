@@ -1,182 +1,246 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
 #nullable disable
 
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Text;
-using System.Text.Encodings.Web;
-using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MonitoringSystem.Data;
+using MonitoringSystem.Models;
 
 namespace MonitoringSystem.Areas.Identity.Pages.Account
 {
-    [AllowAnonymous]
+    // Opsi D: Halaman ini hanya dapat diakses oleh Administrator yang sedang login.
+    [Authorize(Roles = "Administrator,Admin")]
     public class RegisterModel : PageModel
     {
-        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly IUserStore<ApplicationUser> _userStore;
-        private readonly IUserEmailStore<ApplicationUser> _emailStore;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly ScaffoldedDbContext _scaffoldedDb;
         private readonly ILogger<RegisterModel> _logger;
-        private readonly IEmailSender _emailSender;
 
         public RegisterModel(
             UserManager<ApplicationUser> userManager,
-            IUserStore<ApplicationUser> userStore,
-            SignInManager<ApplicationUser> signInManager,
-            ILogger<RegisterModel> logger,
-            IEmailSender emailSender)
+            RoleManager<IdentityRole> roleManager,
+            ScaffoldedDbContext scaffoldedDb,
+            ILogger<RegisterModel> logger)
         {
             _userManager = userManager;
-            _userStore = userStore;
-            _emailStore = GetEmailStore();
-            _signInManager = signInManager;
+            _roleManager = roleManager;
+            _scaffoldedDb = scaffoldedDb;
             _logger = logger;
-            _emailSender = emailSender;
         }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         [BindProperty]
         public InputModel Input { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public string ReturnUrl { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public IList<AuthenticationScheme> ExternalLogins { get; set; }
+        [TempData]
+        public string StatusMessage { get; set; }
 
-        /// <summary>
-        ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public class InputModel
+        [TempData]
+        public string ErrorMessage { get; set; }
+
+        public List<Role> AvailableRoles { get; set; } = new();
+
+        public List<UserViewModel> ExistingUsers { get; set; } = new();
+
+        public class UserViewModel
         {
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            [Required]
-            [EmailAddress]
-            [Display(Name = "Email")]
-            public string Email { get; set; }
-
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            [Required]
-            [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
-            [DataType(DataType.Password)]
-            [Display(Name = "Password")]
-            public string Password { get; set; }
-
-            /// <summary>
-            ///     This API supports the ASP.NET Core Identity default UI infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            [DataType(DataType.Password)]
-            [Display(Name = "Confirm password")]
-            [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
-            public string ConfirmPassword { get; set; }
+            public int UserId { get; set; }
+            public string Username { get; set; }
+            public string FullName { get; set; }
+            public int RoleId { get; set; }
+            public string RoleName { get; set; }
+            public bool IsActive { get; set; }
+            public DateTime CreatedAt { get; set; }
         }
 
+        public class InputModel
+        {
+            [Required(ErrorMessage = "Nama Lengkap wajib diisi.")]
+            [StringLength(200, ErrorMessage = "Nama Lengkap maksimal 200 karakter.")]
+            [Display(Name = "Nama Lengkap")]
+            public string FullName { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "Username wajib diisi.")]
+            [StringLength(50, MinimumLength = 3, ErrorMessage = "Username minimal 3 dan maksimal 50 karakter.")]
+            [RegularExpression(@"^[a-zA-Z0-9_.-]+$", ErrorMessage = "Username hanya boleh huruf, angka, titik, minus, dan underscore.")]
+            [Display(Name = "Username")]
+            public string Username { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "Email wajib diisi.")]
+            [EmailAddress(ErrorMessage = "Format Email tidak valid.")]
+            [Display(Name = "Email")]
+            public string Email { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "Pilihan Role wajib dipilih.")]
+            [Display(Name = "Role")]
+            public int RoleId { get; set; } = 2; // Default to User
+
+            [Required(ErrorMessage = "Password wajib diisi.")]
+            [StringLength(100, ErrorMessage = "Password minimal {2} karakter.", MinimumLength = 6)]
+            [DataType(DataType.Password)]
+            [Display(Name = "Password")]
+            public string Password { get; set; } = string.Empty;
+
+            [DataType(DataType.Password)]
+            [Display(Name = "Konfirmasi Password")]
+            [Compare("Password", ErrorMessage = "Password dan Konfirmasi Password tidak cocok.")]
+            public string ConfirmPassword { get; set; } = string.Empty;
+        }
 
         public async Task OnGetAsync(string returnUrl = null)
         {
             ReturnUrl = returnUrl;
-            ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+            await LoadDataAsync();
         }
 
         public async Task<IActionResult> OnPostAsync(string returnUrl = null)
         {
-            returnUrl ??= Url.Content("~/");
-            ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+            ReturnUrl = returnUrl;
+
             if (ModelState.IsValid)
             {
-                var user = CreateUser();
+                var trimmedUsername = Input.Username.Trim();
+                var trimmedEmail = Input.Email.Trim();
+                var trimmedFullName = Input.FullName.Trim();
 
-                await _userStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
-                await _emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
-                var result = await _userManager.CreateAsync(user, Input.Password);
-
-                if (result.Succeeded)
+                // 1. Cek duplikasi di dbo.Users
+                var existingCustomUser = await _scaffoldedDb.Users
+                    .FirstOrDefaultAsync(u => u.Username.ToLower() == trimmedUsername.ToLower());
+                if (existingCustomUser != null)
                 {
-                    _logger.LogInformation("User created a new account with password.");
-
-                    var userId = await _userManager.GetUserIdAsync(user);
-                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-                    var callbackUrl = Url.Page(
-                        "/Account/ConfirmEmail",
-                        pageHandler: null,
-                        values: new { area = "Identity", userId = userId, code = code, returnUrl = returnUrl },
-                        protocol: Request.Scheme);
-
-                    await _emailSender.SendEmailAsync(Input.Email, "Confirm your email",
-                        $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.");
-
-                    if (_userManager.Options.SignIn.RequireConfirmedAccount)
-                    {
-                        return RedirectToPage("RegisterConfirmation", new { email = Input.Email, returnUrl = returnUrl });
-                    }
-                    else
-                    {
-                        await _signInManager.SignInAsync(user, isPersistent: false);
-                        return LocalRedirect(returnUrl);
-                    }
+                    ModelState.AddModelError("Input.Username", $"Username '{trimmedUsername}' sudah digunakan.");
                 }
-                foreach (var error in result.Errors)
+
+                // 2. Cek duplikasi di AspNetUsers
+                var existingIdentityByEmail = await _userManager.FindByEmailAsync(trimmedEmail);
+                if (existingIdentityByEmail != null)
                 {
-                    ModelState.AddModelError(string.Empty, error.Description);
+                    ModelState.AddModelError("Input.Email", $"Email '{trimmedEmail}' sudah terdaftar.");
+                }
+
+                var existingIdentityByName = await _userManager.FindByNameAsync(trimmedUsername);
+                if (existingIdentityByName != null)
+                {
+                    ModelState.AddModelError("Input.Username", $"Username '{trimmedUsername}' sudah terdaftar di Identity.");
+                }
+
+                if (ModelState.IsValid)
+                {
+                    // 3. Buat di AspNetUsers (Identity)
+                    var identityUser = new ApplicationUser
+                    {
+                        UserName = trimmedUsername,
+                        Email = trimmedEmail,
+                        EmailConfirmed = true
+                    };
+
+                    var createResult = await _userManager.CreateAsync(identityUser, Input.Password);
+                    if (createResult.Succeeded)
+                    {
+                        // 4. Assign Identity Role
+                        string targetIdentityRole = Input.RoleId switch
+                        {
+                            1 => "Administrator",
+                            3 => "Supervisor",
+                            _ => "User"
+                        };
+
+                        if (!await _roleManager.RoleExistsAsync(targetIdentityRole))
+                        {
+                            await _roleManager.CreateAsync(new IdentityRole(targetIdentityRole));
+                        }
+                        await _userManager.AddToRoleAsync(identityUser, targetIdentityRole);
+
+                        // 5. Simpan di dbo.Users (Kompatibel dengan PROMOSYS)
+                        string bcryptHash = BCrypt.Net.BCrypt.HashPassword(Input.Password);
+                        var customUser = new User
+                        {
+                            Username = trimmedUsername,
+                            FullName = trimmedFullName,
+                            RoleId = Input.RoleId,
+                            IsActive = true,
+                            Theme = "light",
+                            PasswordHash = bcryptHash,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _scaffoldedDb.Users.Add(customUser);
+                        await _scaffoldedDb.SaveChangesAsync();
+
+                        _logger.LogInformation("Admin created new user: {Username} (Role: {RoleId})", trimmedUsername, Input.RoleId);
+                        StatusMessage = $"Pengguna '{trimmedUsername}' ({trimmedFullName}) berhasil dibuat dengan role '{targetIdentityRole}'.";
+
+                        // Admin tetap login sebagai Admin, halaman di-refresh
+                        return RedirectToPage();
+                    }
+
+                    foreach (var error in createResult.Errors)
+                    {
+                        ModelState.AddModelError(string.Empty, error.Description);
+                    }
                 }
             }
 
-            // If we got this far, something failed, redisplay form
+            await LoadDataAsync();
             return Page();
         }
 
-        private ApplicationUser CreateUser()
+        public async Task<IActionResult> OnPostToggleStatusAsync(int id)
         {
-            try
+            var user = await _scaffoldedDb.Users.FindAsync(id);
+            if (user != null)
             {
-                return Activator.CreateInstance<ApplicationUser>();
+                if (user.Username.ToLower() == "admin")
+                {
+                    ErrorMessage = "Akun Administrator utama tidak boleh dinonaktifkan.";
+                    return RedirectToPage();
+                }
+
+                user.IsActive = !user.IsActive;
+                await _scaffoldedDb.SaveChangesAsync();
+                StatusMessage = $"Status akun '{user.Username}' berhasil diubah menjadi {(user.IsActive ? "Aktif" : "Non-aktif")}.";
             }
-            catch
-            {
-                throw new InvalidOperationException($"Can't create an instance of '{nameof(ApplicationUser)}'. " +
-                    $"Ensure that '{nameof(ApplicationUser)}' is not an abstract class and has a parameterless constructor, or alternatively " +
-                    $"override the register page in /Areas/Identity/Pages/Account/Register.cshtml");
-            }
+            return RedirectToPage();
         }
 
-        private IUserEmailStore<ApplicationUser> GetEmailStore()
+        private async Task LoadDataAsync()
         {
-            if (!_userManager.SupportsUserEmail)
+            AvailableRoles = await _scaffoldedDb.Roles.OrderBy(r => r.RoleId).ToListAsync();
+            if (!AvailableRoles.Any())
             {
-                throw new NotSupportedException("The default UI requires a user store with email support.");
+                AvailableRoles = new List<Role>
+                {
+                    new Role { RoleId = 1, RoleName = "Admin" },
+                    new Role { RoleId = 2, RoleName = "User" },
+                    new Role { RoleId = 3, RoleName = "Manajemen" }
+                };
             }
-            return (IUserEmailStore<ApplicationUser>)_userStore;
+
+            var usersFromDb = await _scaffoldedDb.Users
+                .Include(u => u.Role)
+                .OrderBy(u => u.UserId)
+                .ToListAsync();
+
+            ExistingUsers = usersFromDb.Select(u => new UserViewModel
+            {
+                UserId = u.UserId,
+                Username = u.Username,
+                FullName = u.FullName,
+                RoleId = u.RoleId,
+                RoleName = u.Role != null ? u.Role.RoleName : (u.RoleId == 1 ? "Admin" : (u.RoleId == 3 ? "Manajemen" : "User")),
+                IsActive = u.IsActive,
+                CreatedAt = u.CreatedAt
+            }).ToList();
         }
     }
 }

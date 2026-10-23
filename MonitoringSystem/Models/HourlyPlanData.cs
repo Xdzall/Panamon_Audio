@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace MonitoringSystem.Models
@@ -7,7 +7,7 @@ namespace MonitoringSystem.Models
     {
         [Key]
         public int Id { get; set; }
-        public string MachineCode { get; set; } // CU (MCH1-01) atau CS (MCH1-02)
+        public string MachineCode { get; set; } // FINAL1, FINAL2, etc.
         public DateTime SelectedDate { get; set; }
         public int TotalPlan { get; set; }
         public DateTime CreatedAt { get; set; }

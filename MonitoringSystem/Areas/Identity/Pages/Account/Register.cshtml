@@ -1,78 +1,544 @@
-﻿@page
+@page
 @model RegisterModel
 @{
-    ViewData["Title"] = "Register";
-    Layout = "_AuthLayout";
+    ViewData["Title"] = "Manage User";
+    Layout = "/Pages/Shared/_Layout.cshtml";
 }
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-9">
-            <div class="card shadow-lg border-0" style="background: transparent;">
-                <div class="text-center py-4">
-                    <h2 class="text-white">@ViewData["Title"]</h2>
-                    <p class="text-white-50 mb-0">Create a new account to get started</p>
+
+<style>
+    /* Panamon Manage User Scoped Styles */
+    .panamon-user-mgmt {
+        padding: 12px 18px 24px;
+        min-height: calc(100vh - 120px);
+    }
+
+    /* Top Filter / Header Bar */
+    .panamon-mgmt-header {
+        position: relative;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 10px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(8px);
+    }
+
+    .panamon-mgmt-header .panamon-accent-bar {
+        position: absolute;
+        bottom: -1px;
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background: linear-gradient(90deg, #38bdf8 0%, #0284c7 50%, transparent 100%);
+    }
+
+    /* Cards */
+    .panamon-card {
+        background: rgba(18, 24, 38, 0.92);
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        border-radius: 10px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .panamon-card-header {
+        background: linear-gradient(90deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.6) 100%);
+        border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+        padding: 12px 18px;
+    }
+
+    .panamon-card-title {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #e0f2fe;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Inputs */
+    .panamon-input-group label {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .panamon-control {
+        background: rgba(10, 15, 29, 0.85) !important;
+        border: 1px solid rgba(71, 85, 105, 0.6) !important;
+        color: #f1f5f9 !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+        padding: 8px 12px !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    .panamon-control:focus {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+        background: rgba(15, 23, 42, 0.95) !important;
+    }
+
+    .panamon-control::placeholder {
+        color: #64748b !important;
+        font-size: 12.5px;
+    }
+
+    /* Buttons */
+    .btn-panamon-primary {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        padding: 10px 16px;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+        transition: all 0.2s ease;
+    }
+
+    .btn-panamon-primary:hover {
+        background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+        border-color: #38bdf8;
+        box-shadow: 0 6px 16px rgba(56, 189, 248, 0.45);
+        color: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    /* Table */
+    .panamon-table {
+        margin: 0;
+        width: 100%;
+        color: #f1f5f9;
+        font-size: 12.5px;
+    }
+
+    .panamon-table thead th {
+        background: rgba(15, 23, 42, 0.85);
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 11px 12px;
+        border-bottom: 2px solid rgba(56, 189, 248, 0.25);
+        white-space: nowrap;
+    }
+
+    .panamon-table tbody td {
+        padding: 10px 12px;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.45);
+        background: transparent;
+    }
+
+    .panamon-table tbody tr:hover td {
+        background: rgba(56, 189, 248, 0.06);
+    }
+
+    /* Badges */
+    .badge-role-admin {
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        color: #f87171;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+
+    .badge-role-user {
+        background: rgba(56, 189, 248, 0.18);
+        border: 1px solid rgba(56, 189, 248, 0.5);
+        color: #38bdf8;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+
+    .badge-role-manajemen {
+        background: rgba(245, 158, 11, 0.18);
+        border: 1px solid rgba(245, 158, 11, 0.5);
+        color: #fbbf24;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+
+    .status-dot-active {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background-color: #10b981;
+        display: inline-block;
+        box-shadow: 0 0 6px #10b981;
+    }
+
+    .status-dot-inactive {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background-color: #ef4444;
+        display: inline-block;
+        box-shadow: 0 0 6px #ef4444;
+    }
+
+    /* Light Mode Overrides */
+    body.light-mode .panamon-mgmt-header {
+        background: #ffffff;
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    body.light-mode .panamon-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+
+    body.light-mode .panamon-card-header {
+        background: #f8fafc;
+        border-bottom-color: #e2e8f0;
+    }
+
+    body.light-mode .panamon-card-title {
+        color: #0f172a;
+    }
+
+    body.light-mode .panamon-control {
+        background: #ffffff !important;
+        border-color: #cbd5e1 !important;
+        color: #0f172a !important;
+    }
+
+    body.light-mode .panamon-table thead th {
+        background: #f1f5f9;
+        color: #475569;
+        border-bottom-color: #cbd5e1;
+    }
+
+    body.light-mode .panamon-table tbody td {
+        border-bottom-color: #e2e8f0;
+        color: #1e293b;
+    }
+
+    body.light-mode .panamon-table tbody tr:hover td {
+        background: #f8fafc;
+    }
+</style>
+
+<div class="panamon-user-mgmt">
+    <!-- Top Panamon Header Bar -->
+    <div class="panamon-mgmt-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div style="background: rgba(56, 189, 248, 0.15); width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(56, 189, 248, 0.3);">
+                <i class="fa-solid fa-users-gear" style="font-size: 22px; color: #38bdf8;"></i>
+            </div>
+            <div>
+                <h4 class="fw-bold m-0 text-white" style="letter-spacing: 0.5px; font-size: 18px;">
+                    MANAGE USER
+                </h4>
+                <div class="small text-white-50 mt-1">
+                    Kelola akun operator, kredensial, dan otorisasi hak akses &bull; <span class="text-info">Panamon Audio BU</span>
                 </div>
-                <div class="card-body p-4">
-                    <form id="registerForm" asp-route-returnUrl="@Model.ReturnUrl" method="post">
-                        <div asp-validation-summary="ModelOnly" class="text-danger mb-3" role="alert"></div>
-                        <div class="mb-3">
-                            <input asp-for="Input.Email"
-                                   class="custom-input"
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge" style="background: rgba(14, 165, 233, 0.2); border: 1px solid #0ea5e9; color: #38bdf8; font-size: 12px; padding: 6px 12px; font-weight: 600;">
+                <i class="fa-solid fa-shield-halved me-1"></i> Admin Console
+            </span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; font-size: 12px; padding: 6px 12px; font-weight: 600;">
+                <i class="fa-solid fa-server me-1"></i> AUDIO_PRODUCTION
+            </span>
+        </div>
+        <div class="panamon-accent-bar"></div>
+    </div>
+
+    <!-- Alert Messages -->
+    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="background: rgba(16, 185, 129, 0.15); border-left: 4px solid #10b981 !important; color: #a7f3d0;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-circle-check fs-5 text-success"></i>
+                <span class="fw-semibold">@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444 !important; color: #fecaca;">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation fs-5 text-danger"></i>
+                <span class="fw-semibold">@Model.ErrorMessage</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- Panel Kiri: Form Registrasi Pengguna Baru -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="panamon-card h-100">
+                <div class="panamon-card-header d-flex align-items-center justify-content-between">
+                    <h5 class="panamon-card-title">
+                        <i class="fa-solid fa-user-plus text-info"></i> Tambah Pengguna Baru
+                    </h5>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 10px;">PROMOSYS SYNC</span>
+                </div>
+                <div class="p-4">
+                    <form id="registerForm" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger small mb-3" role="alert"></div>
+
+                        <!-- Full Name -->
+                        <div class="panamon-input-group mb-3">
+                            <label asp-for="Input.FullName">
+                                <i class="fa-solid fa-id-card text-info"></i> Nama Lengkap
+                            </label>
+                            <input asp-for="Input.FullName"
+                                   class="form-control panamon-control"
+                                   autocomplete="name"
+                                   aria-required="true"
+                                   placeholder="Contoh: Budi Santoso" />
+                            <span asp-validation-for="Input.FullName" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Username -->
+                        <div class="panamon-input-group mb-3">
+                            <label asp-for="Input.Username">
+                                <i class="fa-solid fa-user text-info"></i> Username Login
+                            </label>
+                            <input asp-for="Input.Username"
+                                   class="form-control panamon-control"
                                    autocomplete="username"
                                    aria-required="true"
-                                   placeholder="Email" />
-                            <span asp-validation-for="Input.Email" class="text-danger"></span>
+                                   placeholder="Contoh: budi_audio" />
+                            <span asp-validation-for="Input.Username" class="text-danger small"></span>
                         </div>
-                        <div class="mb-3">
+
+                        <!-- Email -->
+                        <div class="panamon-input-group mb-3">
+                            <label asp-for="Input.Email">
+                                <i class="fa-solid fa-envelope text-info"></i> Alamat Email
+                            </label>
+                            <input asp-for="Input.Email"
+                                   class="form-control panamon-control"
+                                   autocomplete="email"
+                                   aria-required="true"
+                                   placeholder="Contoh: budi@id.panasonic.com" />
+                            <span asp-validation-for="Input.Email" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Role Selection -->
+                        <div class="panamon-input-group mb-3">
+                            <label asp-for="Input.RoleId">
+                                <i class="fa-solid fa-user-shield text-info"></i> Hak Akses (Role)
+                            </label>
+                            <select asp-for="Input.RoleId" class="form-select panamon-control">
+                                @foreach (var r in Model.AvailableRoles)
+                                {
+                                    <option value="@r.RoleId">@r.RoleName</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Input.RoleId" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="panamon-input-group mb-3">
+                            <label asp-for="Input.Password">
+                                <i class="fa-solid fa-lock text-info"></i> Password
+                            </label>
                             <input asp-for="Input.Password"
                                    type="password"
-                                   class="custom-input"
+                                   class="form-control panamon-control"
                                    autocomplete="new-password"
                                    aria-required="true"
-                                   placeholder="Password" />
-                            <span asp-validation-for="Input.Password" class="text-danger"></span>
-                            <div class="form-text" style="color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-top: 0.35rem;">
-                                Password must be at least 6 characters long.
-                            </div>
+                                   placeholder="Minimal 6 karakter" />
+                            <span asp-validation-for="Input.Password" class="text-danger small"></span>
                         </div>
-                        <div class="mb-4">
+
+                        <!-- Confirm Password -->
+                        <div class="panamon-input-group mb-4">
+                            <label asp-for="Input.ConfirmPassword">
+                                <i class="fa-solid fa-shield-halved text-info"></i> Konfirmasi Password
+                            </label>
                             <input asp-for="Input.ConfirmPassword"
                                    type="password"
-                                   class="custom-input"
+                                   class="form-control panamon-control"
                                    autocomplete="new-password"
                                    aria-required="true"
-                                   placeholder="Confirm Password" />
-                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+                                   placeholder="Ulangi password" />
+                            <span asp-validation-for="Input.ConfirmPassword" class="text-danger small"></span>
                         </div>
-                        <div class="d-grid gap-2 mb-4">
-                            <button id="registerSubmit" type="submit" class="btn btn-primary btn-lg">Register</button>
-                        </div>
-                        <div class="text-center">
-                            <span class="text-white-50">Already have an account?</span>
-                            <a asp-page="./Login" asp-route-returnUrl="@Model.ReturnUrl" class="text-decoration-none text-white fw-bold"> Log in</a>
+
+                        <div class="d-grid mt-2">
+                            <button id="registerSubmit" type="submit" class="btn btn-panamon-primary">
+                                <i class="fa-solid fa-user-check me-2"></i> Daftarkan Pengguna Baru
+                            </button>
                         </div>
                     </form>
                 </div>
-                @if (Model.ExternalLogins?.Count > 0)
-                {
-                        <div class="card-footer p-4" style="background: transparent; border-top: 1px solid rgba(255,255,255,0.15);">
-                            <h3 class="text-center mb-3 text-white" style="font-size: 1rem;">Use another service to register</h3>
-                            <form id="external-account" asp-page="./ExternalLogin" asp-route-returnUrl="@Model.ReturnUrl" method="post" class="text-center">
-                                <div>
-                                @foreach (var provider in Model.ExternalLogins!)
-                                {
-                                            <button type="submit" class="btn btn-outline-secondary mb-2 me-2 w-100" name="provider" value="@provider.Name" title="Register using your @provider.DisplayName account">
-                                                <i class="bi bi-@provider.Name.ToLower()"></i> @provider.DisplayName
-                                            </button>
-                                }
-                                </div>
-                            </form>
+            </div>
+        </div>
+
+        <!-- Panel Kanan: Tabel Data Pengguna Terdaftar -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="panamon-card h-100">
+                <div class="panamon-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <h5 class="panamon-card-title">
+                            <i class="fa-solid fa-list-check text-info"></i> Daftar Pengguna Terdaftar
+                        </h5>
+                        <span class="badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-size: 11px;">
+                            Total: @Model.ExistingUsers.Count
+                        </span>
+                    </div>
+
+                    <!-- Client-side Quick Search Filter -->
+                    <div style="min-width: 220px;">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text panamon-control border-end-0" style="background: rgba(10, 15, 29, 0.85); color: #94a3b8;">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </span>
+                            <input type="text" id="userQuickSearch" class="form-control panamon-control border-start-0" placeholder="Filter pengguna..." style="font-size: 12px;" />
                         </div>
-                }
+                    </div>
+                </div>
+
+                <div class="table-responsive flex-grow-1" style="max-height: 580px; overflow-y: auto;">
+                    <table class="panamon-table table table-borderless align-middle m-0" id="userListTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;" class="ps-3">ID</th>
+                                <th>Username</th>
+                                <th>Nama Lengkap</th>
+                                <th style="width: 100px;">Role</th>
+                                <th style="width: 90px;" class="text-center">Status</th>
+                                <th style="width: 120px;">Terdaftar</th>
+                                <th style="width: 70px;" class="text-center pe-3">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!Model.ExistingUsers.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-5 text-white-50">
+                                        <i class="fa-solid fa-users-slash fs-3 d-block mb-2 opacity-50"></i>
+                                        Belum ada pengguna terdaftar dalam sistem.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var u in Model.ExistingUsers)
+                                {
+                                    <tr class="user-row">
+                                        <td class="ps-3 font-monospace text-white-50 small">#@u.UserId</td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div style="width: 28px; height: 28px; border-radius: 6px; background: rgba(56, 189, 248, 0.12); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #38bdf8; font-weight: 700;">
+                                                    @(string.IsNullOrEmpty(u.Username) ? "U" : u.Username.Substring(0, 1).ToUpper())
+                                                </div>
+                                                <div class="user-username fw-bold text-white" style="letter-spacing: 0.3px;">@u.Username</div>
+                                            </div>
+                                        </td>
+                                        <td class="user-fullname text-white-50">@u.FullName</td>
+                                        <td>
+                                            @if (u.RoleId == 1 || u.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="badge-role-admin">
+                                                    <i class="fa-solid fa-crown me-1"></i>Admin
+                                                </span>
+                                            }
+                                            else if (u.RoleId == 3 || u.RoleName.Equals("Manajemen", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="badge-role-manajemen">
+                                                    <i class="fa-solid fa-briefcase me-1"></i>Manajemen
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge-role-user">
+                                                    <i class="fa-solid fa-user me-1"></i>User
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (u.IsActive)
+                                            {
+                                                <span class="d-inline-flex align-items-center gap-1 small text-success fw-semibold">
+                                                    <span class="status-dot-active"></span> Aktif
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="d-inline-flex align-items-center gap-1 small text-danger fw-semibold">
+                                                    <span class="status-dot-inactive"></span> Nonaktif
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-white-50 small font-monospace">@u.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td class="text-center pe-3">
+                                            @if (u.Username.ToLower() != "admin")
+                                            {
+                                                <form method="post" asp-page-handler="ToggleStatus" asp-route-id="@u.UserId" class="d-inline">
+                                                    <button type="submit"
+                                                            class="btn btn-sm @(u.IsActive ? "btn-outline-warning" : "btn-outline-success")"
+                                                            style="padding: 2px 8px; font-size: 11px;"
+                                                            title="@(u.IsActive ? "Nonaktifkan akun" : "Aktifkan akun")"
+                                                            onclick="return confirm('Apakah Anda yakin ingin mengubah status akun @u.Username?');">
+                                                        <i class="fa-solid @(u.IsActive ? "fa-ban" : "fa-check")"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary-subtle text-secondary small" style="font-size: 10px;">Primary</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
 @section Scripts {
-        <partial name="_ValidationScriptsPartial" />
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Client-side quick filter for users table
+        document.getElementById('userQuickSearch')?.addEventListener('input', function (e) {
+            const query = e.target.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#userListTable tbody tr.user-row');
+            rows.forEach(row => {
+                const username = row.querySelector('.user-username')?.textContent.toLowerCase() || '';
+                const fullname = row.querySelector('.user-fullname')?.textContent.toLowerCase() || '';
+                if (username.includes(query) || fullname.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    </script>
 }

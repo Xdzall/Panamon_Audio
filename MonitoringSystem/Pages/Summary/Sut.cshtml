@@ -1,29 +1,18 @@
-﻿@page
+@page
 @model MonitoringSystem.Pages.Shared.SutModel
 @{
     ViewData["Title"] = "SUT";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"]</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link href="~/css/Sidebar.css" rel="stylesheet" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/sweetalert2.css" />
-
-    <style>
+<style>
         /* ============================================================
                    FILTER AREA
                    ============================================================ */
         .filter-area-with-lines {
             position: relative;
             padding: 1px 0;
-            margin-bottom: -63px !important;
-            margin-top: -20px;
+            margin-bottom: 8px !important;
+            margin-top: 0px;
             min-height: 10px;
             width: calc(100% - 14px);
             margin-left: 7px;
@@ -558,8 +547,6 @@
             filter: none;
         }
     </style>
-</head>
-<body>
 
     <div class="filter-area-with-lines">
         <div class="panamon-bottom-line"></div>
@@ -570,13 +557,19 @@
                     <form method="get" class="d-flex flex-wrap align-items-center gap-3">
                         <div class="d-flex align-items-center gap-2">
                             <label class="mb-0">Machine</label>
-                            <select class="form-select" style="width: 100px;" name="FilterMachineCode" asp-for="FilterMachineCode">
-                                <option value="">All</option>
-                                <option value="MCH1-01">CU</option>
-                                <option value="MCH1-02">CS</option>
-                                <!option value="">CB</!option>
-                                <!option value="">EVA</!option>
-                                <!option value="">COND</!option>
+                            <select class="form-select" style="min-width: 175px;" name="FilterMachineCode" asp-for="FilterMachineCode">
+                                <option value="">Semua Lini (FINAL1-11)</option>
+                                <option value="FINAL1">FINAL 1 (Active)</option>
+                                <option value="FINAL2">FINAL 2 (Active)</option>
+                                <option value="FINAL3">FINAL 3 (Active)</option>
+                                <option value="FINAL4">FINAL 4 (Active)</option>
+                                <option value="FINAL5">FINAL 5 (Active)</option>
+                                <option value="FINAL6">FINAL 6 (Standby / Kosong)</option>
+                                <option value="FINAL7">FINAL 7 (Active)</option>
+                                <option value="FINAL8">FINAL 8 (Active)</option>
+                                <option value="FINAL9">FINAL 9 (Active)</option>
+                                <option value="FINAL10">FINAL 10 (Active)</option>
+                                <option value="FINAL11">FINAL 11 (Standby / Kosong)</option>
                             </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Search</button>
@@ -587,6 +580,7 @@
         </div>
     </div>
 
+    
     <div class="sut-card">
         <form id="form-sut" method="post" asp-page-handler="SaveSut">
             <input type="hidden" name="FilterMachineCode" value="@Model.FilterMachineCode" />
@@ -922,6 +916,23 @@
 
             new bootstrap.Modal(document.getElementById('edit-sut-modal')).show();
         }
+        
+        function prefillCreateModal(modelName, machineCode, sut) {
+            const modal = new bootstrap.Modal(document.getElementById('create-sut-modal'));
+            const form = document.querySelector('#create-sut-modal form');
+            if (form) {
+                form.querySelector('input[name="ProductName"]').value = modelName;
+                form.querySelector('input[name="MachineCode"]').value = machineCode;
+                form.querySelector('input[name="SUT"]').value = sut || 30;
+                form.querySelector('input[name="ProdPlan"]').value = 1000;
+                form.querySelector('input[name="NoOfOperator"]').value = 25;
+                form.querySelector('input[name="WorkHour"]').value = 7;
+                form.querySelector('input[name="QtyHour"]').value = Math.round(1000 / 7);
+                form.querySelector('input[name="ProdHeadHour"]').value = 4;
+            }
+            modal.show();
+        }
+
         function openDeleteModal(productId) {
             document.getElementById('delete-product-id').value = productId;
             new bootstrap.Modal(document.getElementById('delete-sut-modal')).show();
@@ -942,5 +953,4 @@
             }
         });
     </script>
-</body>
-</html>
+

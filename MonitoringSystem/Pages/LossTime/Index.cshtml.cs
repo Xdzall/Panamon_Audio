@@ -671,6 +671,8 @@ namespace MonitoringSystem.Pages.LossTime
                             int actualDuration = originalDuration - overlapSec;
 
                             if (actualDuration <= 0) continue;
+                            // Clamp multi-day/weekend non-production shutdown to max shift duration (8 hrs = 28,800s)
+                            if (actualDuration > 28800) actualDuration = 28800;
 
                             string reason = reader.IsDBNull(reader.GetOrdinal("Reason")) ? string.Empty : reader.GetString(reader.GetOrdinal("Reason"));
                             int recordId = reader.IsDBNull(reader.GetOrdinal("Id")) ? 0 : reader.GetInt32(reader.GetOrdinal("Id"));
@@ -949,15 +951,9 @@ WHERE Date >= @StartDate AND Date <= DATEADD(day, 1, @EndDate)";
             if (reasonTokens.Any(token => token.Equals("CS", StringComparison.OrdinalIgnoreCase))) return "CS";
             if (reasonTokens.Any(token => token.Equals("CU", StringComparison.OrdinalIgnoreCase))) return "CU";
 
-            // Mapping line Assembly: MCH1-01 = CU, MCH1-02 = CS.
             var normalizedMachine = (machineCode ?? string.Empty).Trim();
-            if (normalizedMachine.Equals("MCH1-02", StringComparison.OrdinalIgnoreCase) ||
-                normalizedMachine.Equals("CS", StringComparison.OrdinalIgnoreCase)) return "CS";
-            if (normalizedMachine.Equals("MCH1-01", StringComparison.OrdinalIgnoreCase) ||
-                normalizedMachine.Equals("CU", StringComparison.OrdinalIgnoreCase)) return "CU";
-
-            // Pertahankan perilaku lama untuk sumber data yang tidak mempunyai identitas line.
-            return "CU";
+            if (normalizedMachine.StartsWith("FINAL", StringComparison.OrdinalIgnoreCase)) return normalizedMachine.ToUpperInvariant();
+            return "FINAL1";
         }
 
         private void LoadPaginatedData(List<(TimeSpan Start, TimeSpan End)> breakTimes)

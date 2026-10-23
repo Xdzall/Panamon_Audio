@@ -1,4 +1,4 @@
-@page
+﻿@page
 @model MonitoringSystem.Pages.Quality.QualityModel
 @{
     ViewData["Title"] = "Pass Through Ratio";
@@ -40,10 +40,7 @@
                         {
                             <option value="@option.Code" selected="@(option.Code == line.Code)">@option.Code (@option.MachineCode)</option>
                         }
-                        <option value="">CB</option>
-                        <option value="">EVA</option>
-                        <option value="">COND</option>
-                    </select>
+                                                                                            </select>
                 </div>
 
                 <div class="grid-border quality-station-panel">
@@ -71,7 +68,9 @@
                 </div>
             </div>
 
-            <div class="col-md-10 quality-content-column">
+                        <div class="col-md-10 quality-content-column">
+
+                
 
                 <div class="row g-2 quality-kpi-row">
                     <div class="col-md-3">

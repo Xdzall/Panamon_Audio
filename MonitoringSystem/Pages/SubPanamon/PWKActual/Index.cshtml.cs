@@ -22,17 +22,23 @@ namespace MonitoringSystem.Pages.SubPanamon.PWKActual
         // =============================================================================
         // KONFIGURASI - ubah di sini kalau standar pabrik berubah
         // =============================================================================
-        private const string DefaultConn =
-            "Server=.;Database=PROMOSYS;Trusted_Connection=True;TrustServerCertificate=True";
-
-        private string ConnStr => _cfg.GetConnectionString("PROMOSYS") ?? _cfg.GetConnectionString("DefaultConnection") ?? DefaultConn;
+        private string ConnStr => _cfg.GetConnectionString("DefaultConnection") ?? "";
 
         public const string LineName = "Assembly";
 
         private static readonly Dictionary<string, string> GroupMap = new()
         {
-            ["Line CS"] = "MCH1-02",
-            ["Line CU"] = "MCH1-01"
+            ["FINAL 1"] = "FINAL1",
+            ["FINAL 2"] = "FINAL2",
+            ["FINAL 3"] = "FINAL3",
+            ["FINAL 4"] = "FINAL4",
+            ["FINAL 5"] = "FINAL5",
+            ["FINAL 6"] = "FINAL6",
+            ["FINAL 7"] = "FINAL7",
+            ["FINAL 8"] = "FINAL8",
+            ["FINAL 9"] = "FINAL9",
+            ["FINAL 10"] = "FINAL10",
+            ["FINAL 11"] = "FINAL11"
         };
 
         private static readonly string[] ShiftList = { "Shift 1", "Shift 2", "Shift 3", "Non-Shift" };
@@ -288,7 +294,7 @@ namespace MonitoringSystem.Pages.SubPanamon.PWKActual
         public IEnumerable<string> GroupNames => GroupMap.Keys;
         public IEnumerable<string> Shifts => ShiftList;
         public IEnumerable<string> SabtuModes => SabtuList;
-        public string MachineCode => GroupMap.TryGetValue(GroupName ?? "", out var m) ? m : "MCH1-02";
+        public string MachineCode => GroupMap.TryGetValue(GroupName ?? "", out var m) ? m : "FINAL1";
         public IEnumerable<string> ScannerMachineTroubleCategories =>
             string.Equals(GroupName, "Line CU", StringComparison.OrdinalIgnoreCase)
                 ? ScannerCuMachineTroubleCategories

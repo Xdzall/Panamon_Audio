@@ -12,7 +12,9 @@ namespace MonitoringSystem.Pages.Performance
 {
     public class PerformanceModel : PageModel
     {
-        public string connectionString = "Server=10.83.33.103;User Id=sa;Password=sa;Database=PROMOSYS;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False";
+        // Production Server AC (hanya di jaringan internal perusahaan):
+        // public string connectionString = "Server=localhost;User Id=sa;Password=sa;Database=AUDIO_PRODUCTION;Trusted_Connection=False;TrustServerCertificate=True;Encrypt=False";
+        public string connectionString = "Server=localhost\\SQLEXPRESS;Database=AUDIO_PRODUCTION;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False";
         public string errorMessage = "";
 
         private readonly ApplicationDbContext _context;
@@ -61,7 +63,7 @@ namespace MonitoringSystem.Pages.Performance
         public DateTime SelectedDate { get; set; } = DateTime.Now.Date;
 
         [BindProperty(SupportsGet = true)]
-        public string MachineCode { get; set; } = "MCH1-01";
+        public string MachineCode { get; set; } = "FINAL1";
 
 
         // ✅ CACHE PROPERTIES: Hasil query disimpan sekali, dipakai berkali-kali di view
@@ -157,7 +159,7 @@ namespace MonitoringSystem.Pages.Performance
         public void OnGet()
         {
             if (string.IsNullOrEmpty(MachineCode))
-                MachineCode = "MCH1-01";
+                MachineCode = "FINAL1";
 
             if (SelectedDate == default)
                 SelectedDate = DateTime.Today;
@@ -168,7 +170,7 @@ namespace MonitoringSystem.Pages.Performance
         public void OnPost()
         {
             if (string.IsNullOrEmpty(MachineCode))
-                MachineCode = "MCH1-01";
+                MachineCode = "FINAL1";
 
             if (SelectedDate == default)
                 SelectedDate = DateTime.Today;
@@ -303,6 +305,104 @@ namespace MonitoringSystem.Pages.Performance
 
         private void LoadOeesnDashboardData()
         {
+            // =========================================================================
+            // SUMBER DATA KHUSUS PANAMON AUDIO (dbo.FINAL1 s/d dbo.FINAL11)
+            // =========================================================================
+            if (string.IsNullOrEmpty(MachineCode) || MachineCode.StartsWith("FINAL", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetLine = string.IsNullOrEmpty(MachineCode) ? "FINAL1" : MachineCode;
+                var isStandby = targetLine.Equals("FINAL6", StringComparison.OrdinalIgnoreCase) || targetLine.Equals("FINAL11", StringComparison.OrdinalIgnoreCase);
+                if (isStandby)
+                {
+                    CachedActual = 0;
+                    CachedTarget = 0;
+                    CachedEfficiency = 0;
+                    CachedPlanTaktTime = 0;
+                    CachedDefect = 0;
+                    listProdAchieve.Clear();
+                    return;
+                }
+
+                try
+                {
+                    var dayStartAudio = SelectedDate.Date;
+                    var shiftStartAudio = dayStartAudio.AddHours(7);
+                    var shiftEndAudio = shiftStartAudio.AddDays(1);
+
+                    using var conn = new SqlConnection(connectionString);
+                    conn.Open();
+
+                    string audioFinalSql = $@"
+                        SELECT 
+                            ISNULL(MAX(Actual) - MIN(Actual), 0) AS DeltaActual,
+                            ISNULL(MAX(Target) - MIN(Target), 0) AS DeltaTarget,
+                            ISNULL(MAX(Sut), 30) AS SutSec,
+                            (SELECT ISNULL(SUM(Quantity), 0) FROM dbo.DEFECTT WHERE MachineCode = @mc AND DateTime >= @ShiftStart AND DateTime < @ShiftEnd) AS DefectQty
+                        FROM dbo.[{targetLine}]
+                        WHERE DateTime >= @ShiftStart AND DateTime < @ShiftEnd;
+
+                        SELECT 
+                            DATEPART(hour, DateTime) AS Hr,
+                            ISNULL(MAX(Model), 'Audio Model') AS ModelName,
+                            ISNULL(MAX(Actual) - MIN(Actual), 0) AS HourlyActual,
+                            ISNULL(MAX(Target) - MIN(Target), 0) AS HourlyTarget,
+                            ISNULL(MAX(Sut), 30) AS HourlySut
+                        FROM dbo.[{targetLine}]
+                        WHERE DateTime >= @ShiftStart AND DateTime < @ShiftEnd
+                        GROUP BY DATEPART(hour, DateTime)
+                        ORDER BY Hr ASC;";
+
+                    using var cmdFinal = new SqlCommand(audioFinalSql, conn);
+                    cmdFinal.Parameters.AddWithValue("@mc", targetLine);
+                    cmdFinal.Parameters.AddWithValue("@ShiftStart", shiftStartAudio);
+                    cmdFinal.Parameters.AddWithValue("@ShiftEnd", shiftEndAudio);
+
+                    using var rdr = cmdFinal.ExecuteReader();
+                    if (rdr.Read())
+                    {
+                        CachedActual = rdr.GetInt32(0);
+                        CachedTarget = rdr.GetInt32(1);
+                        var sut = rdr.GetInt32(2);
+                        CachedPlanTaktTime = sut;
+                        CachedDefect = rdr.GetInt32(3);
+                        CachedEfficiency = (int)Math.Round(((CachedActual * sut) * 1.0 / 32100) * 100.0);
+                    }
+
+                    listProdAchieve.Clear();
+                    if (rdr.NextResult())
+                    {
+                        while (rdr.Read())
+                        {
+                            var hr = rdr.GetInt32(0);
+                            var modelName = rdr.GetString(1);
+                            var hrActual = rdr.GetInt32(2);
+                            var hrTarget = rdr.GetInt32(3);
+                            var hrSut = rdr.GetInt32(4);
+
+                            var st = new TimeSpan(hr, 0, 0);
+                            var et = new TimeSpan((hr + 1) % 24, 0, 0);
+
+                            listProdAchieve.Add(new ProductionAchievement
+                            {
+                                MachineCode = targetLine,
+                                FirstTime = SelectedDate.Date.Add(st),
+                                StartTime = st,
+                                EndTime = et,
+                                Time = $"{st:hh\\:mm} - {et:hh\\:mm}",
+                                Model = modelName,
+                                Plan = hrTarget,
+                                SUT = hrSut,
+                                Actual = hrActual
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error Audio Performance: " + ex.Message);
+                }
+                return;
+            }
             const int maximumCycleMultiplier = 3;
 
             var dayStart = SelectedDate.Date;
@@ -620,7 +720,7 @@ namespace MonitoringSystem.Pages.Performance
             return planPerHour > 0 ? planPerHour : 1;
         }
 
-        // ✅ COMMENTED: Tabel AdditionalBreakTime belum ada di database PROMOSYS
+        // ✅ COMMENTED: Tabel AdditionalBreakTime belum ada di database AUDIO_PRODUCTION
         // Untuk mengaktifkan kembali: buat tabel dulu, lalu hapus comment di bawah
         private void LoadBreakTimesFromDb()
         {
@@ -687,7 +787,7 @@ namespace MonitoringSystem.Pages.Performance
         {
             try
             {
-                MachineCode = !string.IsNullOrEmpty(machineCode) ? machineCode : "MCH1-01";
+                MachineCode = !string.IsNullOrEmpty(machineCode) ? machineCode : "FINAL1";
                 SelectedDate = selectedDate != default ? selectedDate : DateTime.Today;
 
                 LoadAllData();

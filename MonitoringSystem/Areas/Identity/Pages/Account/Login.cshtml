@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model LoginModel
 @{
     ViewData["Title"] = "Log in PANAMON";
@@ -8,13 +8,12 @@
 <!-- Alert Success Message -->
 @if (!string.IsNullOrEmpty(Model.StatusMessage))
 {
-            <div id="statusAlert" class="alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3" role="alert" style="z-index: 1050; min-width: 300px;">
+    <div id="statusAlert" class="alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3" role="alert" style="z-index: 1050; min-width: 300px;">
         @Model.StatusMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
-<!-- Login Card - HAPUS mt-5 dari container -->
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-9">
@@ -32,7 +31,7 @@
                                    class="custom-input"
                                    autocomplete="username"
                                    aria-required="true"
-                                   placeholder="Email" />
+                                   placeholder="Username or Email" />
                             <span asp-validation-for="Input.Email" class="text-danger"></span>
                         </div>
 
@@ -50,29 +49,30 @@
                             <button id="login-submit" type="submit" class="btn btn-primary btn-lg">Log in</button>
                         </div>
 
-                        <div class="text-center">
+                        <div class="text-center mt-3">
                             <div>
-                                <a id="forgot-password" asp-page="./ForgotPassword" asp-route-returnUrl="@Model.ReturnUrl" class="text-decoration-none text-white">Forgot your password?</a>
+                                <a id="forgot-password" asp-page="./ForgotPassword" asp-route-returnUrl="@Model.ReturnUrl" class="text-decoration-none text-white-50">Forgot your password?</a>
                             </div>
+                            @* [DISEMBUNYIKAN - Opsi D] Registrasi mandiri publik dinonaktifkan, akun baru dibuat terkelola oleh Admin. *@
                         </div>
                     </form>
                 </div>
 
                 @if (Model.ExternalLogins?.Count > 0)
                 {
-                            <div class="card-footer bg-light p-4">
-                                <h3 class="text-center mb-3">Use another service to log in</h3>
-                                <form id="external-account" asp-page="./ExternalLogin" asp-route-returnUrl="@Model.ReturnUrl" method="post" class="text-center">
-                                    <div>
+                    <div class="card-footer bg-light p-4">
+                        <h3 class="text-center mb-3">Use another service to log in</h3>
+                        <form id="external-account" asp-page="./ExternalLogin" asp-route-returnUrl="@Model.ReturnUrl" method="post" class="text-center">
+                            <div>
                                 @foreach (var provider in Model.ExternalLogins!)
                                 {
-                                                    <button type="submit" class="btn btn-outline-secondary mb-2 me-2 w-100" name="provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">
-                                                        <i class="bi bi-@provider.Name.ToLower()"></i> @provider.DisplayName
-                                                    </button>
+                                    <button type="submit" class="btn btn-outline-secondary mb-2 me-2 w-100" name="provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">
+                                        <i class="bi bi-@provider.Name.ToLower()"></i> @provider.DisplayName
+                                    </button>
                                 }
-                                    </div>
-                                </form>
                             </div>
+                        </form>
+                    </div>
                 }
             </div>
         </div>
@@ -80,17 +80,17 @@
 </div>
 
 @section Scripts {
-            <partial name="_ValidationScriptsPartial" />
+    <partial name="_ValidationScriptsPartial" />
 
-            <script>
-                window.addEventListener('DOMContentLoaded', (event) => {
-                    const alertElem = document.getElementById('statusAlert');
-                    if (alertElem) {
-                        setTimeout(() => {
-                            let bsAlert = bootstrap.Alert.getOrCreateInstance(alertElem);
-                            bsAlert.close();
-                        }, 5000);
-                    }
-                });
-            </script>
+    <script>
+        window.addEventListener('DOMContentLoaded', (event) => {
+            const alertElem = document.getElementById('statusAlert');
+            if (alertElem) {
+                setTimeout(() => {
+                    let bsAlert = bootstrap.Alert.getOrCreateInstance(alertElem);
+                    bsAlert.close();
+                }, 5000);
+            }
+        });
+    </script>
 }

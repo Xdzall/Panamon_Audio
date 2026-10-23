@@ -62,9 +62,22 @@ namespace MonitoringSystem.Pages.LossTimeReport
 
         private List<(TimeSpan Start, TimeSpan End)> GetAllBreakTimes()
         {
-            return _breakTimeService.GetBreakTimesForDateAsync(DateTime.Today).Result
-                .Select(b => (b.StartTime, b.EndTime))
-                .ToList();
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                conn.Open();
+                return MonitoringSystem.Services.BreakSchedule.Load(conn, DateTime.Today)
+                    .Select(b => (b.StartTime, b.EndTime))
+                    .ToList();
+            }
+            catch
+            {
+                return new List<(TimeSpan Start, TimeSpan End)>
+                {
+                    (new TimeSpan(11, 45, 0), new TimeSpan(12, 30, 0)),
+                    (new TimeSpan(17, 30, 0), new TimeSpan(18, 0, 0))
+                };
+            }
         }
 
         [BindProperty(SupportsGet = true)]
@@ -102,7 +115,7 @@ namespace MonitoringSystem.Pages.LossTimeReport
 
         // Pilihan "All" di UI berarti gabungan dua line yang tersedia: CU dan CS.
         // Gunakan cakupan line yang sama untuk actual dan BP.
-        private static readonly string[] TrendMachineLines = { "MCH1-01", "MCH1-02" };
+        private static readonly string[] TrendMachineLines = { "FINAL1", "FINAL2", "FINAL3", "FINAL4", "FINAL5", "FINAL6", "FINAL7", "FINAL8", "FINAL9", "FINAL10", "FINAL11" };
 
         // Menampung total Working Loss saja (untuk ringkasan & grafik)
         public double[] TotalActualPerMonth { get; set; } = new double[12];
@@ -403,6 +416,7 @@ namespace MonitoringSystem.Pages.LossTimeReport
                                     durationSec -= overlapSec;
 
                                     if (durationSec <= 0) continue;
+                                    if (durationSec > 28800) durationSec = 28800;
 
                                     rawList.Add(new MonthlyCategoryData
                                     {
