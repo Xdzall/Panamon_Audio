@@ -68,14 +68,44 @@ namespace DashboardAUDIO.Controllers
 
                     try
                     {
+                        // Hari produksi 07.00 - 07.00. Actual/Target = jumlah kenaikan counter
+                        // antar snapshot (aturan sama dengan Production Achievement): snapshot
+                        // pembanding diambil lintas hari sehingga carryover kemarin bernilai 0,
+                        // dan counter turun dianggap reset (nilai baru dihitung dari 0).
                         var sql = $@"
-                            SELECT TOP 1
-                                Actual,
-                                Target,
-                                DailyPlan
-                            FROM dbo.FINAL{i}
-                            WHERE CONVERT(date, DateTime) = CONVERT(date, GETDATE())
-                            ORDER BY ID DESC";
+                            DECLARE @from DATETIME2 = DATEADD(hour, 7, CAST(CAST(DATEADD(hour, -7, GETDATE()) AS DATE) AS DATETIME2));
+                            DECLARE @to DATETIME2 = DATEADD(day, 1, @from);
+
+                            SELECT
+                                SUM(CASE
+                                    WHEN PrevActual IS NULL THEN 0
+                                    WHEN Actual >= PrevActual THEN Actual - PrevActual
+                                    ELSE Actual
+                                END) AS Actual,
+                                SUM(CASE
+                                    WHEN PrevTarget IS NULL THEN 0
+                                    WHEN Target >= PrevTarget THEN Target - PrevTarget
+                                    ELSE Target
+                                END) AS Target,
+                                (SELECT TOP 1 DailyPlan FROM dbo.FINAL{i}
+                                 WHERE DateTime >= @from AND DateTime < @to
+                                 ORDER BY DateTime DESC, ID DESC) AS DailyPlan
+                            FROM (
+                                SELECT DateTime, Actual, Target,
+                                       LAG(Actual) OVER (ORDER BY DateTime, ID) AS PrevActual,
+                                       LAG(Target) OVER (ORDER BY DateTime, ID) AS PrevTarget
+                                FROM (
+                                    SELECT ID, DateTime, Actual, Target FROM dbo.FINAL{i}
+                                    WHERE Actual IS NOT NULL AND DateTime >= @from AND DateTime < @to
+                                    UNION ALL
+                                    SELECT * FROM (
+                                        SELECT TOP 1 ID, DateTime, Actual, Target FROM dbo.FINAL{i}
+                                        WHERE Actual IS NOT NULL AND DateTime < @from
+                                        ORDER BY DateTime DESC, ID DESC
+                                    ) lastBefore
+                                ) windowed
+                            ) snapshots
+                            WHERE DateTime >= @from";
 
                         var row = await connection.QuerySingleOrDefaultAsync<dynamic>(sql);
                         if (row != null)

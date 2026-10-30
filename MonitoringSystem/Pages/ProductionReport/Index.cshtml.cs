@@ -264,19 +264,60 @@ namespace MonitoringSystem.Pages.ProductionReport
                 }
             }
 
+            // Change Plan per lini per hari produksi (07.00 - 07.00):
+            // input manual di ProductionRecords bila ada, selain itu DailyPlan
+            // dari snapshot terakhir dbo.FINALx (DailyPlan adalah plan harian lini,
+            // nilainya terulang di setiap model sehingga tidak dijumlah per model).
+            var planLines = new List<string> { "FINAL1", "FINAL2", "FINAL3", "FINAL4", "FINAL5", "FINAL7", "FINAL8", "FINAL9", "FINAL10" };
+            if (MachineLine != "All")
+            {
+                planLines = planLines.Where(l => l.Equals(MachineLine, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            var dailyPlanQueries = planLines.Select(l => $@"
+            SELECT '{l}' AS MachineCode, Day, DailyPlan
+            FROM (
+                SELECT DAY(CAST(DATEADD(hour, -7, DateTime) AS DATE)) AS Day,
+                       DailyPlan,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY CAST(DATEADD(hour, -7, DateTime) AS DATE)
+                           ORDER BY DateTime DESC, ID DESC) AS rn
+                FROM dbo.[{l}]
+                WHERE DateTime >= DATEADD(hour, 7, CAST(DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1) AS DATETIME2))
+                  AND DateTime < DATEADD(hour, 7, CAST(DATEADD(month, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)) AS DATETIME2))
+                  AND DailyPlan IS NOT NULL
+            ) lastSnapshot
+            WHERE rn = 1").ToList();
+
+            string dailyPlanLineSql = dailyPlanQueries.Count > 0
+                ? string.Join(" UNION ALL ", dailyPlanQueries)
+                : "SELECT CAST(NULL AS VARCHAR(20)) AS MachineCode, 0 AS Day, 0 AS DailyPlan WHERE 1=0";
+
             string planSql = $@"
-    SELECT DAY(pp.CurrentDate) as Day, 
-           {selectQuantityColumn} as TotalPlanQuantity, 
-           {selectOvertimeColumn} as TotalPlanOvertime
-    FROM ProductionPlan pp
-    INNER JOIN ProductionRecords pr ON pp.Id = pr.PlanId
-    WHERE pp.CurrentDate >= DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)
-      AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
-      {(MachineLine != "All"
-                    ? "AND pr.MachineCode = @MachineLine"
-                    : "AND pr.MachineCode LIKE 'FINAL%'")}
-      {planShiftFilter}
-    GROUP BY DAY(pp.CurrentDate)";
+    WITH ChangePlanLine AS (
+        SELECT DAY(pp.CurrentDate) as Day,
+               pr.MachineCode,
+               {selectQuantityColumn} as TotalPlanQuantity,
+               {selectOvertimeColumn} as TotalPlanOvertime
+        FROM ProductionPlan pp
+        INNER JOIN ProductionRecords pr ON pp.Id = pr.PlanId
+        WHERE pp.CurrentDate >= DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)
+          AND pp.CurrentDate < DATEADD(MONTH, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1))
+          {(MachineLine != "All"
+                        ? "AND pr.MachineCode = @MachineLine"
+                        : "AND pr.MachineCode LIKE 'FINAL%'")}
+          {planShiftFilter}
+        GROUP BY DAY(pp.CurrentDate), pr.MachineCode
+    ),
+    DailyPlanLine AS (
+        {dailyPlanLineSql}
+    )
+    SELECT COALESCE(cp.Day, dp.Day) as Day,
+           SUM(COALESCE(cp.TotalPlanQuantity, dp.DailyPlan)) as TotalPlanQuantity,
+           SUM(cp.TotalPlanOvertime) as TotalPlanOvertime
+    FROM ChangePlanLine cp
+    FULL OUTER JOIN DailyPlanLine dp ON cp.Day = dp.Day AND cp.MachineCode = dp.MachineCode
+    GROUP BY COALESCE(cp.Day, dp.Day)";
 
 
             string anyPlanSql = $@"
@@ -323,29 +364,47 @@ namespace MonitoringSystem.Pages.ProductionReport
                 audioLines = audioLines.Where(l => l.Equals(MachineLine, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
+            // Actual = jumlah kenaikan counter antar snapshot (aturan sama dengan DashboardAudio).
+            // Snapshot pembanding diambil lintas hari, sehingga nilai sisa kemarin di pagi hari
+            // (carryover) bernilai 0. Counter turun dianggap reset: nilai baru dihitung dari 0.
+            string monthFrom = "DATEADD(hour, 7, CAST(DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1) AS DATETIME2))";
+            string monthTo = "DATEADD(hour, 7, CAST(DATEADD(month, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)) AS DATETIME2))";
+
             var lineQueries = new List<string>();
             foreach (var l in audioLines)
             {
                 lineQueries.Add($@"
-                    SELECT 
+                    SELECT
                         '{l}' AS MachineCode,
-                        CASE 
-                            WHEN CAST(DateTime AS TIME) < '07:00:00' 
-                            THEN DAY(DATEADD(day, -1, CAST(DateTime AS DATE)))
-                            ELSE DAY(CAST(DateTime AS DATE))
-                        END AS Day,
-                        ISNULL(MAX(Actual) - MIN(Actual), 0) AS DeltaActual,
-                        ISNULL(MAX(Target) - MIN(Target), 0) AS DeltaTarget,
+                        DAY(CAST(DATEADD(hour, -7, DateTime) AS DATE)) AS Day,
+                        ISNULL(SUM(CASE
+                            WHEN PrevActual IS NULL THEN 0
+                            WHEN Actual >= PrevActual THEN Actual - PrevActual
+                            ELSE Actual
+                        END), 0) AS DeltaActual,
+                        ISNULL(SUM(CASE
+                            WHEN PrevTarget IS NULL THEN 0
+                            WHEN Target >= PrevTarget THEN Target - PrevTarget
+                            ELSE Target
+                        END), 0) AS DeltaTarget,
                         MAX(CAST(DateTime AS TIME)) AS MaxTime
-                    FROM dbo.[{l}]
-                    WHERE DateTime >= DATEADD(hour, 7, CAST(DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1) AS DATETIME2))
-                      AND DateTime < DATEADD(hour, 7, CAST(DATEADD(month, 1, DATEFROMPARTS(@SelectedYear, @SelectedMonth, 1)) AS DATETIME2))
-                    GROUP BY 
-                        CASE 
-                            WHEN CAST(DateTime AS TIME) < '07:00:00' 
-                            THEN DAY(DATEADD(day, -1, CAST(DateTime AS DATE)))
-                            ELSE DAY(CAST(DateTime AS DATE))
-                        END");
+                    FROM (
+                        SELECT DateTime, Actual, Target,
+                               LAG(Actual) OVER (ORDER BY DateTime, ID) AS PrevActual,
+                               LAG(Target) OVER (ORDER BY DateTime, ID) AS PrevTarget
+                        FROM (
+                            SELECT ID, DateTime, Actual, Target FROM dbo.[{l}]
+                            WHERE Actual IS NOT NULL AND DateTime >= {monthFrom} AND DateTime < {monthTo}
+                            UNION ALL
+                            SELECT * FROM (
+                                SELECT TOP 1 ID, DateTime, Actual, Target FROM dbo.[{l}]
+                                WHERE Actual IS NOT NULL AND DateTime < {monthFrom}
+                                ORDER BY DateTime DESC, ID DESC
+                            ) lastBefore
+                        ) windowed
+                    ) snapshots
+                    WHERE DateTime >= {monthFrom}
+                    GROUP BY DAY(CAST(DATEADD(hour, -7, DateTime) AS DATE))");
             }
 
             string actualSql = lineQueries.Count > 0 
